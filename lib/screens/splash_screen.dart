@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import '../widgets/gocart_logo.dart';
 import 'login_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -16,7 +18,9 @@ class _SplashScreenState extends State<SplashScreen> {
     super.initState();
 
     Timer(const Duration(seconds: 2), () {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
 
       Navigator.pushReplacement(
         context,
@@ -28,24 +32,35 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.shopping_cart, size: 100),
-            const SizedBox(height: 24),
-            const Text(
-              'GoCart',
-              style: TextStyle(fontSize: 38, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Your mini online store',
-              style: TextStyle(fontSize: 16),
-            ),
-            const SizedBox(height: 32),
-            const CircularProgressIndicator(),
-          ],
+      backgroundColor: const Color(0xFFFFF9FF),
+
+      body: SafeArea(
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // GoCart official logo
+              const GoCartLogo(width: 300),
+
+              const SizedBox(height: 30),
+
+              const SizedBox(
+                width: 26,
+                height: 26,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: Color(0xFF6F4B9B),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              Text(
+                'Getting things ready...',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+            ],
+          ),
         ),
       ),
     );
