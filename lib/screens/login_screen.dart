@@ -7,7 +7,9 @@ import 'signup_screen.dart';
 import 'user_home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final bool switchAccount;
+
+  const LoginScreen({super.key, this.switchAccount = false});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -17,7 +19,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
 
   final TextEditingController emailController = TextEditingController();
-
   final TextEditingController passwordController = TextEditingController();
 
   bool isLoading = false;
@@ -30,9 +31,9 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // ==========================================================================
+  // ============================================================
   // LOGIN
-  // ==========================================================================
+  // ============================================================
 
   Future<void> login() async {
     if (!_formKey.currentState!.validate()) {
@@ -44,10 +45,23 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
+      final supabase = Supabase.instance.client;
+
       final email = emailController.text.trim();
       final password = passwordController.text;
 
-      final response = await Supabase.instance.client.auth.signInWithPassword(
+      // ----------------------------------------------------------
+      // If this screen was opened specifically for account
+      // switching, remove the existing authenticated session first.
+      // ----------------------------------------------------------
+      if (widget.switchAccount && supabase.auth.currentSession != null) {
+        await supabase.auth.signOut();
+      }
+
+      // ----------------------------------------------------------
+      // Supabase authentication
+      // ----------------------------------------------------------
+      final response = await supabase.auth.signInWithPassword(
         email: email,
         password: password,
       );
@@ -55,41 +69,84 @@ class _LoginScreenState extends State<LoginScreen> {
       final user = response.user;
 
       if (user == null) {
-        throw Exception('Login failed.');
+        throw Exception('Login failed. Please try again.');
       }
 
-      final profile = await Supabase.instance.client
+      // ----------------------------------------------------------
+      // Load the user's role from the profiles table.
+      // ----------------------------------------------------------
+      final profile = await supabase
           .from('profiles')
           .select('role')
           .eq('id', user.id)
-          .single();
+          .maybeSingle();
 
-      final role = profile['role'] as String;
+      if (profile == null) {
+        await supabase.auth.signOut();
+
+        throw Exception(
+          'Your account profile could not be found. '
+          'Please contact support.',
+        );
+      }
+
+      final role = profile['role'] as String?;
+
+      if (role != 'merchant' && role != 'user') {
+        await supabase.auth.signOut();
+
+        throw Exception(
+          'Your account has an invalid role. '
+          'Please contact support.',
+        );
+      }
 
       if (!mounted) {
         return;
       }
 
+      // ----------------------------------------------------------
+      // IMPORTANT:
+      //
+      // Do NOT use pushReplacement here.
+      //
+      // A user may have reached Login from:
+      //
+      // Home → Profile → Login
+      //
+      // pushReplacement would leave Home/Profile underneath the
+      // authenticated screen.
+      //
+      // pushAndRemoveUntil completely resets the navigation stack.
+      // ----------------------------------------------------------
+
       if (role == 'merchant') {
-        Navigator.pushReplacement(
+        Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(
             builder: (context) => const MerchantDashboardScreen(),
           ),
+          (route) => false,
         );
       } else {
-        Navigator.pushReplacement(
+        Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const UserHomeScreen()),
+          (route) => false,
         );
       }
     } on AuthException catch (error) {
       if (mounted) {
-        _showMessage(error.message, isError: true);
+        _showMessage(_friendlyAuthError(error), isError: true);
       }
     } catch (error) {
       if (mounted) {
-        _showMessage('Something went wrong: $error', isError: true);
+        final message = error.toString().replaceFirst('Exception: ', '').trim();
+
+        _showMessage(
+          message.isEmpty ? 'Something went wrong. Please try again.' : message,
+          isError: true,
+        );
       }
     } finally {
       if (mounted) {
@@ -100,25 +157,68 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // ==========================================================================
+  // ============================================================
+  // AUTH ERROR MESSAGE
+  // ============================================================
+
+  String _friendlyAuthError(AuthException error) {
+    final message = error.message.toLowerCase();
+
+    if (message.contains('invalid login credentials')) {
+      return 'Incorrect email or password.';
+    }
+
+    if (message.contains('email not confirmed')) {
+      return 'Please verify your email before signing in.';
+    }
+
+    if (message.contains('too many requests')) {
+      return 'Too many login attempts. Please wait a moment and try again.';
+    }
+
+    if (message.contains('network')) {
+      return 'Network error. Please check your internet connection.';
+    }
+
+    return error.message;
+  }
+
+  // ============================================================
   // MESSAGE
-  // ==========================================================================
+  // ============================================================
 
   void _showMessage(String message, {required bool isError}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: isError
-            ? Colors.red.shade700
-            : const Color(0xFF6F4B9B),
-        content: Text(message),
-      ),
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: isError
+              ? Colors.red.shade700
+              : const Color(0xFF6F4B9B),
+          content: Text(message),
+        ),
+      );
+  }
+
+  // ============================================================
+  // SIGN UP
+  // ============================================================
+
+  void _openSignup() {
+    if (isLoading) {
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const SignupScreen()),
     );
   }
 
-  // ==========================================================================
+  // ============================================================
   // BUILD
-  // ==========================================================================
+  // ============================================================
 
   @override
   Widget build(BuildContext context) {
@@ -139,57 +239,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   constraints: const BoxConstraints(maxWidth: 1050),
                   child: Column(
                     children: [
-                      // ======================================================
-                      // TOP NAVIGATION
-                      // ======================================================
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const SizedBox(width: 90),
-
-                          if (isWide)
-                            Row(
-                              children: [
-                                Text(
-                                  'Don\'t have an account?',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.grey.shade700,
-                                  ),
-                                ),
-                                TextButton(
-                                  onPressed: isLoading
-                                      ? null
-                                      : () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (context) =>
-                                                  const SignupScreen(),
-                                            ),
-                                          );
-                                        },
-                                  child: const Text(
-                                    'Create account →',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      color: Color(0xFF6F4B9B),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            )
-                          else
-                            const SizedBox(width: 90),
-                        ],
-                      ),
-
                       const SizedBox(height: 12),
 
-                      // ======================================================
-                      // BRAND
-                      // ======================================================
-                      const GoCartLogo(width: 185),
+                      const GoCartLogo(width: 155),
 
                       const SizedBox(height: 18),
 
@@ -217,9 +269,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       const SizedBox(height: 30),
 
-                      // ======================================================
-                      // LOGIN CARD
-                      // ======================================================
                       Container(
                         width: double.infinity,
                         constraints: const BoxConstraints(maxWidth: 470),
@@ -264,9 +313,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
                               const SizedBox(height: 25),
 
-                              // ==================================================
-                              // EMAIL
-                              // ==================================================
                               const _FieldLabel(text: 'Email address'),
 
                               const SizedBox(height: 8),
@@ -295,9 +341,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
                               const SizedBox(height: 19),
 
-                              // ==================================================
-                              // PASSWORD
-                              // ==================================================
                               const _FieldLabel(text: 'Password'),
 
                               const SizedBox(height: 8),
@@ -346,9 +389,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
                               const SizedBox(height: 27),
 
-                              // ==================================================
-                              // LOGIN BUTTON
-                              // ==================================================
                               SizedBox(
                                 height: 55,
                                 child: FilledButton(
@@ -394,44 +434,42 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
 
-                              const SizedBox(height: 20),
+                              const SizedBox(height: 16),
 
-                              // ==================================================
-                              // MOBILE SIGNUP
-                              // ==================================================
-                              if (!isWide)
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text(
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Flexible(
+                                    child: Text(
                                       'Don\'t have an account?',
+                                      textAlign: TextAlign.center,
                                       style: TextStyle(
                                         fontSize: 13,
                                         color: Colors.grey.shade700,
                                       ),
                                     ),
-                                    TextButton(
-                                      onPressed: isLoading
-                                          ? null
-                                          : () {
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (context) =>
-                                                      const SignupScreen(),
-                                                ),
-                                              );
-                                            },
-                                      child: const Text(
-                                        'Create account',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w700,
-                                          color: Color(0xFF6F4B9B),
-                                        ),
+                                  ),
+                                  TextButton(
+                                    onPressed: isLoading ? null : _openSignup,
+                                    style: TextButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 8,
+                                      ),
+                                      minimumSize: Size.zero,
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                    ),
+                                    child: const Text(
+                                      'Create account →',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFF6F4B9B),
                                       ),
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
+                              ),
                             ],
                           ),
                         ),
@@ -439,9 +477,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       const SizedBox(height: 25),
 
-                      // ======================================================
-                      // BRAND FOOTER
-                      // ======================================================
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -450,7 +485,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             height: 1,
                             color: const Color(0xFFD8C9E2),
                           ),
+
                           const SizedBox(width: 12),
+
                           const Text(
                             'SHOP SMART, GOCART',
                             style: TextStyle(
@@ -460,7 +497,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               color: Color(0xFF6F4B9B),
                             ),
                           ),
+
                           const SizedBox(width: 12),
+
                           Container(
                             width: 34,
                             height: 1,
@@ -472,7 +511,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 8),
 
                       Text(
-                        'GoCart • Mini E-Commerce App',
+                        'GoCart • DMM-dev • 2026  All rights reserved.',
                         style: TextStyle(
                           fontSize: 11,
                           color: Colors.grey.shade500,
@@ -489,9 +528,9 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ==========================================================================
+  // ============================================================
   // INPUT DECORATION
-  // ==========================================================================
+  // ============================================================
 
   InputDecoration _inputDecoration({
     required String hint,
@@ -500,40 +539,30 @@ class _LoginScreenState extends State<LoginScreen> {
   }) {
     return InputDecoration(
       hintText: hint,
-
       prefixIcon: Icon(icon, color: const Color(0xFF6F4B9B)),
-
       suffixIcon: suffix,
-
       filled: true,
-
       fillColor: const Color(0xFFFAF7FC),
-
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: BorderSide.none,
       ),
-
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(color: Color(0xFFE4D9E9)),
       ),
-
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(color: Color(0xFF6F4B9B), width: 1.5),
       ),
-
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(color: Color(0xFFE57373)),
       ),
-
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(color: Color(0xFFE53935), width: 1.5),
       ),
-
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
     );
   }

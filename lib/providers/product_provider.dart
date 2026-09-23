@@ -1,7 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../models/product.dart';
 import '../services/product_service.dart';
+
+// --------------------------------------------------
+// Product Service
+// --------------------------------------------------
 
 final productServiceProvider = Provider<ProductService>((ref) {
   return ProductService();
@@ -22,69 +27,47 @@ class ProductsNotifier extends AsyncNotifier<List<Product>> {
     return ref.read(productServiceProvider).getAllProducts();
   }
 
+  // --------------------------------------------------
+  // Refresh all products
+  // --------------------------------------------------
+
   Future<void> refreshProducts() async {
     state = const AsyncLoading();
 
-    state = await AsyncValue.guard(() {
-      return ref.read(productServiceProvider).getAllProducts();
-    });
+    state = await AsyncValue.guard(
+      () => ref.read(productServiceProvider).getAllProducts(),
+    );
   }
+
+  // --------------------------------------------------
+  // Search products
+  // --------------------------------------------------
 
   Future<void> search(String searchText) async {
     state = const AsyncLoading();
 
-    state = await AsyncValue.guard(() {
-      return ref.read(productServiceProvider).searchProducts(searchText);
-    });
-  }
-
-  Future<void> addProduct({
-    required String name,
-    required String description,
-    required double price,
-    required int stock,
-    String? imageUrl,
-  }) async {
-    final service = ref.read(productServiceProvider);
-
-    await service.createProduct(
-      name: name,
-      description: description,
-      price: price,
-      stock: stock,
-      imageUrl: imageUrl,
+    state = await AsyncValue.guard(
+      () => ref.read(productServiceProvider).searchProducts(searchText),
     );
-
-    await refreshProducts();
   }
 
-  Future<void> updateProduct({
-    required int productId,
-    required String name,
-    required String description,
-    required double price,
-    required int stock,
-    String? imageUrl,
-  }) async {
-    final service = ref.read(productServiceProvider);
+  // --------------------------------------------------
+  // Filter products by category
+  // --------------------------------------------------
 
-    await service.updateProduct(
-      productId: productId,
-      name: name,
-      description: description,
-      price: price,
-      stock: stock,
-      imageUrl: imageUrl,
+  Future<void> filterByCategory(String category) async {
+    state = const AsyncLoading();
+
+    state = await AsyncValue.guard(
+      () => ref.read(productServiceProvider).getProductsByCategory(category),
     );
-
-    await refreshProducts();
   }
 
-  Future<void> deleteProduct(int productId) async {
-    final service = ref.read(productServiceProvider);
+  // --------------------------------------------------
+  // Reset to all products
+  // --------------------------------------------------
 
-    await service.deleteProduct(productId);
-
+  Future<void> clearFilters() async {
     await refreshProducts();
   }
 }
@@ -105,41 +88,60 @@ class MyProductsNotifier extends AsyncNotifier<List<Product>> {
     return ref.read(productServiceProvider).getMyProducts();
   }
 
+  // --------------------------------------------------
+  // Refresh merchant products
+  // --------------------------------------------------
+
   Future<void> refreshProducts() async {
     state = const AsyncLoading();
 
-    state = await AsyncValue.guard(() {
-      return ref.read(productServiceProvider).getMyProducts();
-    });
+    state = await AsyncValue.guard(
+      () => ref.read(productServiceProvider).getMyProducts(),
+    );
   }
+
+  // --------------------------------------------------
+  // Add Product
+  // --------------------------------------------------
 
   Future<void> addProduct({
     required String name,
     required String description,
-    required double price,
+    required double originalPrice,
+    required double offerPrice,
     required int stock,
-    String? imageUrl,
+    required String category,
+    XFile? imageFile,
   }) async {
     final service = ref.read(productServiceProvider);
 
     await service.createProduct(
       name: name,
       description: description,
-      price: price,
+      originalPrice: originalPrice,
+      offerPrice: offerPrice,
       stock: stock,
-      imageUrl: imageUrl,
+      category: category,
+      imageFile: imageFile,
     );
 
     await refreshProducts();
   }
 
+  // --------------------------------------------------
+  // Update Product
+  // --------------------------------------------------
+
   Future<void> updateProduct({
     required int productId,
     required String name,
     required String description,
-    required double price,
+    required double originalPrice,
+    required double offerPrice,
     required int stock,
-    String? imageUrl,
+    required String category,
+    XFile? imageFile,
+    bool removeImage = false,
   }) async {
     final service = ref.read(productServiceProvider);
 
@@ -147,13 +149,20 @@ class MyProductsNotifier extends AsyncNotifier<List<Product>> {
       productId: productId,
       name: name,
       description: description,
-      price: price,
+      originalPrice: originalPrice,
+      offerPrice: offerPrice,
       stock: stock,
-      imageUrl: imageUrl,
+      category: category,
+      imageFile: imageFile,
+      removeImage: removeImage,
     );
 
     await refreshProducts();
   }
+
+  // --------------------------------------------------
+  // Delete Product
+  // --------------------------------------------------
 
   Future<void> deleteProduct(int productId) async {
     final service = ref.read(productServiceProvider);

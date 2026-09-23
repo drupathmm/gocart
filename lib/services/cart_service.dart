@@ -5,12 +5,26 @@ import '../models/cart_item.dart';
 class CartService {
   final SupabaseClient _supabase = Supabase.instance.client;
 
-  Future<List<CartItem>> getMyCart() async {
+  // --------------------------------------------------
+  // Current user
+  // --------------------------------------------------
+
+  String _requireUserId() {
     final user = _supabase.auth.currentUser;
 
     if (user == null) {
       throw Exception('You must be logged in.');
     }
+
+    return user.id;
+  }
+
+  // --------------------------------------------------
+  // Get my cart
+  // --------------------------------------------------
+
+  Future<List<CartItem>> getMyCart() async {
+    final userId = _requireUserId();
 
     final response = await _supabase
         .from('cart_items')
@@ -25,14 +39,17 @@ class CartService {
             merchant_id,
             name,
             description,
+            original_price,
+            offer_price,
             price,
             stock,
+            category,
             image_url,
             created_at,
             updated_at
           )
         ''')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .order('created_at', ascending: false);
 
     return (response as List)
@@ -40,62 +57,71 @@ class CartService {
         .toList();
   }
 
+  // --------------------------------------------------
+  // Add to cart
+  //
+  // Stock validation is performed atomically inside
+  // PostgreSQL through the add_to_cart RPC.
+  // --------------------------------------------------
+
   Future<void> addToCart({required int productId, int quantity = 1}) async {
-    final user = _supabase.auth.currentUser;
+    _requireUserId();
 
-    if (user == null) {
-      throw Exception('You must be logged in.');
+    if (quantity <= 0) {
+      throw Exception('Quantity must be greater than zero.');
     }
 
-    final existing = await _supabase
-        .from('cart_items')
-        .select('id, quantity')
-        .eq('user_id', user.id)
-        .eq('product_id', productId)
-        .maybeSingle();
-
-    if (existing != null) {
-      final currentQuantity = existing['quantity'] as int;
-
-      await _supabase
-          .from('cart_items')
-          .update({'quantity': currentQuantity + quantity})
-          .eq('id', existing['id']);
-    } else {
-      await _supabase.from('cart_items').insert({
-        'user_id': user.id,
-        'product_id': productId,
-        'quantity': quantity,
-      });
-    }
+    await _supabase.rpc(
+      'add_to_cart',
+      params: {'p_product_id': productId, 'p_quantity': quantity},
+    );
   }
+
+  // --------------------------------------------------
+  // Update cart quantity
+  //
+  // Stock validation is performed atomically inside
+  // PostgreSQL through the update_cart_quantity RPC.
+  // --------------------------------------------------
 
   Future<void> updateQuantity({
     required int cartItemId,
     required int quantity,
   }) async {
+    _requireUserId();
+
     if (quantity <= 0) {
       await removeFromCart(cartItemId);
       return;
     }
 
-    await _supabase
-        .from('cart_items')
-        .update({'quantity': quantity})
-        .eq('id', cartItemId);
+    await _supabase.rpc(
+      'update_cart_quantity',
+      params: {'p_cart_item_id': cartItemId, 'p_quantity': quantity},
+    );
   }
+
+  // --------------------------------------------------
+  // Remove cart item
+  // --------------------------------------------------
 
   Future<void> removeFromCart(int cartItemId) async {
-    await _supabase.from('cart_items').delete().eq('id', cartItemId);
+    final userId = _requireUserId();
+
+    await _supabase
+        .from('cart_items')
+        .delete()
+        .eq('id', cartItemId)
+        .eq('user_id', userId);
   }
 
+  // --------------------------------------------------
+  // Clear entire cart
+  // --------------------------------------------------
+
   Future<void> clearCart() async {
-    final user = _supabase.auth.currentUser;
+    final userId = _requireUserId();
 
-    if (user == null) {
-      throw Exception('You must be logged in.');
-    }
-
-    await _supabase.from('cart_items').delete().eq('user_id', user.id);
+    await _supabase.from('cart_items').delete().eq('user_id', userId);
   }
 }

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/product.dart';
 import '../providers/cart_provider.dart';
+import '../widgets/login_required_dialog.dart';
 
 // ============================================================================
 // GOCART BRAND COLORS
@@ -33,12 +35,10 @@ class ProductDetailScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: _GoCartColors.pearlWhite,
-
       appBar: AppBar(
         backgroundColor: _GoCartColors.pearlWhite,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
-
         leading: IconButton(
           tooltip: 'Back',
           icon: const Icon(Icons.arrow_back_rounded),
@@ -46,12 +46,10 @@ class ProductDetailScreen extends ConsumerWidget {
             Navigator.pop(context);
           },
         ),
-
         title: const Text(
           'Product Details',
           style: TextStyle(fontWeight: FontWeight.w700),
         ),
-
         actions: [
           IconButton(
             tooltip: 'Close',
@@ -60,11 +58,9 @@ class ProductDetailScreen extends ConsumerWidget {
               Navigator.pop(context);
             },
           ),
-
           const SizedBox(width: 8),
         ],
       ),
-
       body: SafeArea(
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -74,11 +70,9 @@ class ProductDetailScreen extends ConsumerWidget {
             isDesktop ? 36 : 18,
             40,
           ),
-
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 1200),
-
               child: isDesktop
                   ? _DesktopLayout(
                       product: product,
@@ -118,24 +112,13 @@ class _DesktopLayout extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Breadcrumb
-        _Breadcrumb(),
-
+        const _Breadcrumb(),
         const SizedBox(height: 18),
-
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ==============================================================
-            // LEFT: IMAGE
-            // ==============================================================
             Expanded(flex: 11, child: _ProductGallery(product: product)),
-
             const SizedBox(width: 34),
-
-            // ==============================================================
-            // RIGHT: DETAILS
-            // ==============================================================
             Expanded(
               flex: 9,
               child: _ProductInformation(
@@ -171,14 +154,10 @@ class _MobileLayout extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _Breadcrumb(),
-
+        const _Breadcrumb(),
         const SizedBox(height: 14),
-
         _ProductGallery(product: product),
-
         const SizedBox(height: 24),
-
         _ProductInformation(
           product: product,
           isOutOfStock: isOutOfStock,
@@ -204,24 +183,20 @@ class _Breadcrumb extends StatelessWidget {
           'Home',
           style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
         ),
-
         Icon(
           Icons.chevron_right_rounded,
           size: 18,
           color: Colors.grey.shade500,
         ),
-
         Text(
           'Products',
           style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
         ),
-
         Icon(
           Icons.chevron_right_rounded,
           size: 18,
           color: Colors.grey.shade500,
         ),
-
         const Text(
           'Product Details',
           style: TextStyle(
@@ -247,25 +222,17 @@ class _ProductGallery extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final imageUrl = product.imageUrl?.trim();
-
     final hasImage = imageUrl != null && imageUrl.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ================================================================
-        // MAIN IMAGE
-        // ================================================================
         Container(
           width: double.infinity,
-
           height: 500,
-
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(24),
-
             color: _GoCartColors.darkPurple,
-
             boxShadow: [
               BoxShadow(
                 color: _GoCartColors.purple.withValues(alpha: 0.12),
@@ -274,20 +241,14 @@ class _ProductGallery extends StatelessWidget {
               ),
             ],
           ),
-
           child: ClipRRect(
             borderRadius: BorderRadius.circular(24),
-
             child: hasImage
                 ? Image.network(
                     imageUrl,
                     width: double.infinity,
                     height: double.infinity,
-
-                    // Contain keeps the complete product
-                    // visible instead of brutally cropping it.
                     fit: BoxFit.contain,
-
                     loadingBuilder: (context, child, loadingProgress) {
                       if (loadingProgress == null) {
                         return child;
@@ -300,7 +261,6 @@ class _ProductGallery extends StatelessWidget {
                         ),
                       );
                     },
-
                     errorBuilder: (context, error, stackTrace) {
                       return const _ImageError();
                     },
@@ -308,29 +268,19 @@ class _ProductGallery extends StatelessWidget {
                 : const _ImagePlaceholder(),
           ),
         ),
-
         const SizedBox(height: 12),
-
-        // ================================================================
-        // IMAGE INDICATOR
-        // ================================================================
         Row(
           children: [
             Container(
               width: 76,
               height: 64,
-
               decoration: BoxDecoration(
                 color: _GoCartColors.softPurple,
-
                 borderRadius: BorderRadius.circular(12),
-
                 border: Border.all(color: _GoCartColors.purple, width: 2),
               ),
-
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(10),
-
                 child: hasImage
                     ? Image.network(
                         imageUrl,
@@ -348,17 +298,13 @@ class _ProductGallery extends StatelessWidget {
                       ),
               ),
             ),
-
             const SizedBox(width: 10),
-
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-
               decoration: BoxDecoration(
                 color: _GoCartColors.softPurple,
                 borderRadius: BorderRadius.circular(20),
               ),
-
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -408,16 +354,8 @@ class _ProductInformation extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ================================================================
-        // STOCK BADGE
-        // ================================================================
         _StockBadge(stock: product.stock),
-
         const SizedBox(height: 16),
-
-        // ================================================================
-        // PRODUCT NAME
-        // ================================================================
         Text(
           product.name,
           style: const TextStyle(
@@ -427,14 +365,11 @@ class _ProductInformation extends StatelessWidget {
             height: 1.15,
           ),
         ),
-
         const SizedBox(height: 12),
 
-        // ================================================================
-        // PRICE
-        // ================================================================
+        // Offer price
         Text(
-          '₹${product.price.toStringAsFixed(2)}',
+          '₹${product.offerPrice.toStringAsFixed(2)}',
           style: const TextStyle(
             fontSize: 30,
             fontWeight: FontWeight.w800,
@@ -443,46 +378,58 @@ class _ProductInformation extends StatelessWidget {
           ),
         ),
 
-        const SizedBox(height: 22),
+        // Original price + discount
+        if (product.hasDiscount) ...[
+          const SizedBox(height: 5),
+          Row(
+            children: [
+              Text(
+                '₹${product.originalPrice.toStringAsFixed(2)}',
+                style: TextStyle(
+                  fontSize: 15,
+                  color: Colors.grey.shade600,
+                  decoration: TextDecoration.lineThrough,
+                  decorationThickness: 1.5,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _GoCartColors.lightPurple,
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Text(
+                  '${product.discountPercentage.toStringAsFixed(0)}% OFF',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: _GoCartColors.darkPurple,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
 
-        // ================================================================
-        // PRODUCT META
-        // ================================================================
+        const SizedBox(height: 22),
         _ProductMeta(product: product),
-
         const SizedBox(height: 22),
-
-        // ================================================================
-        // DESCRIPTION
-        // ================================================================
         _DescriptionCard(description: description),
-
         const SizedBox(height: 22),
-
-        // ================================================================
-        // ADD TO CART
-        // ================================================================
         _AddToCartButton(
           product: product,
           isOutOfStock: isOutOfStock,
           ref: ref,
         ),
-
         const SizedBox(height: 14),
-
-        // ================================================================
-        // SMALL INFORMATION
-        // ================================================================
         Container(
           width: double.infinity,
-
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-
           decoration: BoxDecoration(
             color: _GoCartColors.softPurple,
             borderRadius: BorderRadius.circular(14),
           ),
-
           child: Row(
             children: [
               const Icon(
@@ -490,9 +437,7 @@ class _ProductInformation extends StatelessWidget {
                 size: 19,
                 color: _GoCartColors.purple,
               ),
-
               const SizedBox(width: 10),
-
               Expanded(
                 child: Text(
                   isOutOfStock
@@ -528,13 +473,10 @@ class _StockBadge extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-
       decoration: BoxDecoration(
         color: isAvailable ? _GoCartColors.lightPurple : Colors.red.shade50,
-
         borderRadius: BorderRadius.circular(10),
       ),
-
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -545,9 +487,7 @@ class _StockBadge extends StatelessWidget {
             size: 16,
             color: isAvailable ? _GoCartColors.darkPurple : Colors.red.shade600,
           ),
-
           const SizedBox(width: 6),
-
           Text(
             isAvailable ? '$stock available' : 'Out of stock',
             style: TextStyle(
@@ -577,15 +517,11 @@ class _ProductMeta extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
-
       decoration: BoxDecoration(
         color: Colors.white,
-
         borderRadius: BorderRadius.circular(16),
-
         border: Border.all(color: Colors.grey.shade200),
       ),
-
       child: Row(
         children: [
           Expanded(
@@ -595,20 +531,16 @@ class _ProductMeta extends StatelessWidget {
               value: '${product.stock}',
             ),
           ),
-
           Container(width: 1, height: 38, color: Colors.grey.shade200),
-
           Expanded(
             child: _MetaItem(
               icon: Icons.sell_outlined,
               title: 'Price',
-              value: '₹${product.price.toStringAsFixed(0)}',
+              value: '₹${product.offerPrice.toStringAsFixed(0)}',
             ),
           ),
-
           Container(width: 1, height: 38, color: Colors.grey.shade200),
-
-          Expanded(
+          const Expanded(
             child: _MetaItem(
               icon: Icons.shopping_bag_outlined,
               title: 'GoCart',
@@ -641,16 +573,12 @@ class _MetaItem extends StatelessWidget {
     return Column(
       children: [
         Icon(icon, size: 20, color: _GoCartColors.purple),
-
         const SizedBox(height: 6),
-
         Text(
           title,
           style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
         ),
-
         const SizedBox(height: 2),
-
         Text(
           value,
           maxLines: 1,
@@ -675,17 +603,12 @@ class _DescriptionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-
       padding: const EdgeInsets.all(18),
-
       decoration: BoxDecoration(
         color: _GoCartColors.softPurple,
-
         borderRadius: BorderRadius.circular(18),
-
         border: Border.all(color: _GoCartColors.lightPurple),
       ),
-
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -694,21 +617,17 @@ class _DescriptionCard extends StatelessWidget {
               Container(
                 width: 34,
                 height: 34,
-
                 decoration: BoxDecoration(
                   color: _GoCartColors.purple,
                   borderRadius: BorderRadius.circular(10),
                 ),
-
                 child: const Icon(
                   Icons.description_outlined,
                   size: 18,
                   color: Colors.white,
                 ),
               ),
-
               const SizedBox(width: 10),
-
               const Text(
                 'Description',
                 style: TextStyle(
@@ -719,9 +638,7 @@ class _DescriptionCard extends StatelessWidget {
               ),
             ],
           ),
-
           const SizedBox(height: 14),
-
           Text(
             description.isEmpty ? 'No description available.' : description,
             style: TextStyle(
@@ -763,6 +680,27 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
       return;
     }
 
+    // ================================================================
+    // CHECK LOGIN BEFORE TOUCHING THE CART PROVIDER
+    // ================================================================
+
+    final user = Supabase.instance.client.auth.currentUser;
+
+    if (user == null) {
+      await showLoginRequiredDialog(
+        context,
+        title: 'Login required',
+        message:
+            'Please login or create an account to add products to your cart.',
+      );
+
+      return;
+    }
+
+    // ================================================================
+    // USER IS LOGGED IN
+    // ================================================================
+
     setState(() {
       isAdding = true;
     });
@@ -779,19 +717,15 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-
           backgroundColor: _GoCartColors.darkPurple,
-
+          duration: const Duration(seconds: 3),
           content: Row(
             children: [
               const Icon(Icons.check_circle_rounded, color: Colors.white),
-
               const SizedBox(width: 10),
-
               Expanded(child: Text('${widget.product.name} added to cart')),
             ],
           ),
-
           action: SnackBarAction(
             label: 'VIEW CART',
             textColor: Colors.white,
@@ -806,15 +740,92 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
         return;
       }
 
+      final errorMessage = error.toString();
+
+      // ==============================================================
+      // STOCK LIMIT
+      // ==============================================================
+      //
+      // This is NOT a system failure. The user has simply reached
+      // the maximum quantity available for this product.
+      //
+      // Do not expose PostgrestException, P0001, SQL details, etc.
+      // to the customer.
+      // ==============================================================
+
+      final isStockLimitError =
+          errorMessage.contains('Only') && errorMessage.contains('available');
+
+      if (isStockLimitError) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: _GoCartColors.darkPurple,
+            duration: const Duration(seconds: 4),
+            content: Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.shopping_cart_checkout_rounded,
+                    color: Colors.white,
+                    size: 19,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'You already have all available stock in your cart.',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            action: SnackBarAction(
+              label: 'VIEW CART',
+              textColor: Colors.white,
+              onPressed: () {
+                Navigator.pop(context);
+              },
+            ),
+          ),
+        );
+
+        return;
+      }
+
+      // ==============================================================
+      // OTHER UNEXPECTED ERRORS
+      // ==============================================================
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
-
           backgroundColor: Colors.red.shade700,
-
-          content: Text('Failed to add to cart: $error'),
+          duration: const Duration(seconds: 4),
+          content: const Row(
+            children: [
+              Icon(Icons.error_outline_rounded, color: Colors.white),
+              SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'We could not add this product to your cart. Please try again.',
+                ),
+              ),
+            ],
+          ),
         ),
       );
+
+      debugPrint('Add to cart error: $error');
     } finally {
       if (mounted) {
         setState(() {
@@ -829,26 +840,18 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
     return SizedBox(
       width: double.infinity,
       height: 58,
-
       child: FilledButton.icon(
         onPressed: widget.isOutOfStock ? null : _addToCart,
-
         style: FilledButton.styleFrom(
           backgroundColor: _GoCartColors.purple,
-
           foregroundColor: Colors.white,
-
           disabledBackgroundColor: Colors.grey.shade300,
-
           disabledForegroundColor: Colors.grey.shade600,
-
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(15),
           ),
-
           elevation: 0,
         ),
-
         icon: isAdding
             ? const SizedBox(
                 width: 20,
@@ -859,7 +862,6 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
                 ),
               )
             : const Icon(Icons.shopping_cart_rounded),
-
         label: Text(
           isAdding
               ? 'Adding to Cart...'
