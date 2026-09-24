@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../widgets/gocart_logo.dart';
+import 'admin_dashboard_screen.dart';
 import 'merchant_dashboard_screen.dart';
 import 'signup_screen.dart';
 import 'user_home_screen.dart';
@@ -51,9 +52,9 @@ class _LoginScreenState extends State<LoginScreen> {
       final password = passwordController.text;
 
       // ----------------------------------------------------------
-      // If this screen was opened specifically for account
-      // switching, remove the existing authenticated session first.
+      // Account switching
       // ----------------------------------------------------------
+
       if (widget.switchAccount && supabase.auth.currentSession != null) {
         await supabase.auth.signOut();
       }
@@ -61,6 +62,7 @@ class _LoginScreenState extends State<LoginScreen> {
       // ----------------------------------------------------------
       // Supabase authentication
       // ----------------------------------------------------------
+
       final response = await supabase.auth.signInWithPassword(
         email: email,
         password: password,
@@ -73,11 +75,12 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       // ----------------------------------------------------------
-      // Load the user's role from the profiles table.
+      // Load role and merchant status
       // ----------------------------------------------------------
+
       final profile = await supabase
           .from('profiles')
-          .select('role')
+          .select('role, merchant_status')
           .eq('id', user.id)
           .maybeSingle();
 
@@ -91,12 +94,33 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       final role = profile['role'] as String?;
+      final merchantStatus = profile['merchant_status'] as String?;
 
-      if (role != 'merchant' && role != 'user') {
+      // ----------------------------------------------------------
+      // Validate role
+      //
+      // Admin is intentionally NOT shown anywhere in signup.
+      // It is only assigned directly in the database.
+      // ----------------------------------------------------------
+
+      if (role != 'merchant' && role != 'user' && role != 'admin') {
         await supabase.auth.signOut();
 
         throw Exception(
           'Your account has an invalid role. '
+          'Please contact support.',
+        );
+      }
+
+      // ----------------------------------------------------------
+      // Suspended merchant protection
+      // ----------------------------------------------------------
+
+      if (role == 'merchant' && merchantStatus == 'suspended') {
+        await supabase.auth.signOut();
+
+        throw Exception(
+          'Your merchant account has been suspended. '
           'Please contact support.',
         );
       }
@@ -106,18 +130,21 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       // ----------------------------------------------------------
-      // IMPORTANT:
-      //
-      // Do NOT use pushReplacement here.
-      //
-      // A user may have reached Login from:
-      //
-      // Home → Profile → Login
-      //
-      // pushReplacement would leave Home/Profile underneath the
-      // authenticated screen.
-      //
-      // pushAndRemoveUntil completely resets the navigation stack.
+      // ADMIN
+      // ----------------------------------------------------------
+
+      if (role == 'admin') {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (context) => const AdminDashboardScreen()),
+          (route) => false,
+        );
+
+        return;
+      }
+
+      // ----------------------------------------------------------
+      // MERCHANT
       // ----------------------------------------------------------
 
       if (role == 'merchant') {
@@ -128,13 +155,19 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           (route) => false,
         );
-      } else {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const UserHomeScreen()),
-          (route) => false,
-        );
+
+        return;
       }
+
+      // ----------------------------------------------------------
+      // BUYER
+      // ----------------------------------------------------------
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const UserHomeScreen()),
+        (route) => false,
+      );
     } on AuthException catch (error) {
       if (mounted) {
         _showMessage(_friendlyAuthError(error), isError: true);
@@ -485,9 +518,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             height: 1,
                             color: const Color(0xFFD8C9E2),
                           ),
-
                           const SizedBox(width: 12),
-
                           const Text(
                             'SHOP SMART, GOCART',
                             style: TextStyle(
@@ -497,9 +528,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               color: Color(0xFF6F4B9B),
                             ),
                           ),
-
                           const SizedBox(width: 12),
-
                           Container(
                             width: 34,
                             height: 1,

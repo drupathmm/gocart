@@ -6,7 +6,9 @@ import 'cart_screen.dart';
 import 'user_home_screen.dart';
 
 class BuyerProfileScreen extends ConsumerStatefulWidget {
-  const BuyerProfileScreen({super.key});
+  final VoidCallback onBack;
+
+  const BuyerProfileScreen({super.key, required this.onBack});
 
   @override
   ConsumerState<BuyerProfileScreen> createState() => _BuyerProfileScreenState();
@@ -374,14 +376,18 @@ class _BuyerProfileScreenState extends ConsumerState<BuyerProfileScreen> {
       backgroundColor: const Color(0xFFFFF9FF),
       body: SafeArea(
         child: profileAsync.when(
-          loading: () => const Center(
-            child: CircularProgressIndicator(color: Color(0xFF6F4B9B)),
-          ),
-          error: (error, stackTrace) => _ProfileErrorView(
-            onRetry: () {
-              ref.read(profileProvider.notifier).refreshProfile();
-            },
-          ),
+          loading: () {
+            return const Center(
+              child: CircularProgressIndicator(color: Color(0xFF6F4B9B)),
+            );
+          },
+          error: (error, stackTrace) {
+            return _ProfileErrorView(
+              onRetry: () {
+                ref.read(profileProvider.notifier).refreshProfile();
+              },
+            );
+          },
           data: (profile) {
             return RefreshIndicator(
               color: const Color(0xFF6F4B9B),
@@ -405,9 +411,7 @@ class _BuyerProfileScreenState extends ConsumerState<BuyerProfileScreen> {
                             children: [
                               IconButton(
                                 tooltip: 'Back',
-                                onPressed: () {
-                                  Navigator.pop(context);
-                                },
+                                onPressed: widget.onBack,
                                 icon: const Icon(Icons.arrow_back_rounded),
                               ),
                               const SizedBox(width: 4),

@@ -80,7 +80,7 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
     final pages = [
       const _UserProductsPage(),
       const CartScreen(),
-      const ProfileScreen(),
+      ProfileScreen(onBuyerBack: () => changePage(0)),
     ];
 
     return Scaffold(
@@ -144,9 +144,7 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
                           changePage(0);
                         },
                       ),
-
                       const SizedBox(width: 6),
-
                       _TopNavItem(
                         icon: Icons.shopping_cart_outlined,
                         selectedIcon: Icons.shopping_cart_rounded,
@@ -156,9 +154,7 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
                           changePage(1);
                         },
                       ),
-
                       const SizedBox(width: 6),
-
                       _TopNavItem(
                         icon: Icons.person_outline_rounded,
                         selectedIcon: Icons.person_rounded,
@@ -228,7 +224,6 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
                 onClear: clearSearch,
               ),
             ),
-
           Expanded(child: pages[currentIndex]),
         ],
       ),
@@ -263,9 +258,7 @@ class _GoCartLogo extends StatelessWidget {
             color: colorScheme.onPrimary,
           ),
         ),
-
         const SizedBox(width: 10),
-
         const Text(
           'GoCart',
           style: TextStyle(
@@ -379,9 +372,7 @@ class _TopNavItem extends StatelessWidget {
                     ? colorScheme.primary
                     : colorScheme.onSurfaceVariant,
               ),
-
               const SizedBox(width: 7),
-
               Text(
                 label,
                 style: TextStyle(
@@ -462,9 +453,7 @@ class _UserProductsPageState extends ConsumerState<_UserProductsPage> {
       onRefresh: refreshProducts,
       child: productsAsync.when(
         loading: () => const _LoadingView(),
-
         error: (error, stackTrace) => _ErrorView(onRetry: refreshProducts),
-
         data: (products) {
           return _HomeContent(
             products: products,
@@ -549,9 +538,7 @@ class _HomeContent extends StatelessWidget {
                             style: Theme.of(context).textTheme.titleLarge
                                 ?.copyWith(fontWeight: FontWeight.w700),
                           ),
-
                           const SizedBox(height: 3),
-
                           Text(
                             selectedCategory == 'All'
                                 ? 'Explore products by category'
@@ -562,7 +549,6 @@ class _HomeContent extends StatelessWidget {
                         ],
                       ),
                     ),
-
                     if (selectedCategory != 'All')
                       TextButton(
                         onPressed: () {
@@ -602,9 +588,7 @@ class _HomeContent extends StatelessWidget {
                             style: Theme.of(context).textTheme.titleLarge
                                 ?.copyWith(fontWeight: FontWeight.w700),
                           ),
-
                           const SizedBox(height: 3),
-
                           Text(
                             products.isEmpty
                                 ? 'No products available'
@@ -615,7 +599,6 @@ class _HomeContent extends StatelessWidget {
                         ],
                       ),
                     ),
-
                     if (selectedCategory != 'All')
                       TextButton.icon(
                         onPressed: () {
@@ -667,7 +650,9 @@ class _HomeBannerCarousel extends StatefulWidget {
 
 class _HomeBannerCarouselState extends State<_HomeBannerCarousel> {
   final PageController _pageController = PageController();
+
   Timer? _autoPlayTimer;
+
   int _currentPage = 0;
 
   @override
@@ -860,6 +845,10 @@ class _HomeBannerCarouselState extends State<_HomeBannerCarousel> {
   }
 }
 
+// ============================================================================
+// HOME BANNER DATA
+// ============================================================================
+
 class _HomeBannerData {
   final String eyebrow;
   final String title;
@@ -877,6 +866,10 @@ class _HomeBannerData {
     required this.icon,
   });
 }
+
+// ============================================================================
+// HOME BANNER CARD
+// ============================================================================
 
 class _HomeBannerCard extends StatelessWidget {
   final _HomeBannerData data;
@@ -975,7 +968,7 @@ class _HomeBannerCard extends StatelessWidget {
                           const SizedBox(height: 9),
                           Text(
                             data.title,
-                            maxLines: isMobile ? 2 : 2,
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: Colors.white,
@@ -1051,6 +1044,10 @@ class _HomeBannerCard extends StatelessWidget {
     );
   }
 }
+
+// ============================================================================
+// BANNER PRODUCT IMAGE
+// ============================================================================
 
 class _BannerProductImage extends StatelessWidget {
   final String? imageUrl;
@@ -1141,7 +1138,9 @@ class _ProductGrid extends StatelessWidget {
 
         final itemWidth = (width - ((columns - 1) * spacing)) / columns;
 
-        final imageHeight = itemWidth * 0.72;
+        // Reduced from 0.72.
+        // This makes the product cards more compact.
+        final imageHeight = itemWidth * 0.64;
 
         return GridView.builder(
           shrinkWrap: true,
@@ -1151,7 +1150,11 @@ class _ProductGrid extends StatelessWidget {
             crossAxisCount: columns,
             crossAxisSpacing: spacing,
             mainAxisSpacing: spacing,
-            mainAxisExtent: imageHeight + 142,
+
+            // Reduced from imageHeight + 142.
+            // The previous height combined with Spacer()
+            // created the large empty area.
+            mainAxisExtent: imageHeight + 112,
           ),
           itemBuilder: (context, index) {
             return _ProductCard(
@@ -1183,10 +1186,10 @@ class _ProductCard extends StatelessWidget {
 
     return Material(
       color: colorScheme.surface,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(16),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         onTap: isOutOfStock
             ? null
             : () {
@@ -1199,13 +1202,13 @@ class _ProductCard extends StatelessWidget {
               },
         child: Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(color: colorScheme.outlineVariant),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 12,
-                offset: const Offset(0, 5),
+                color: Colors.black.withValues(alpha: 0.035),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
@@ -1223,6 +1226,9 @@ class _ProductCard extends StatelessWidget {
                   children: [
                     _ProductImage(imageUrl: product.imageUrl),
 
+                    // ------------------------------------------------------
+                    // OUT OF STOCK
+                    // ------------------------------------------------------
                     if (isOutOfStock)
                       Container(
                         color: Colors.black.withValues(alpha: 0.38),
@@ -1239,10 +1245,13 @@ class _ProductCard extends StatelessWidget {
                         ),
                       ),
 
+                    // ------------------------------------------------------
+                    // DISCOUNT BADGE
+                    // ------------------------------------------------------
                     if (product.hasDiscount && !isOutOfStock)
                       Positioned(
-                        top: 10,
-                        left: 10,
+                        top: 9,
+                        left: 9,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 8,
@@ -1271,25 +1280,28 @@ class _ProductCard extends StatelessWidget {
               // ==========================================================
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(13, 10, 13, 10),
+                  padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // ----------------------------------------------------
+                      // PRODUCT NAME
+                      // ----------------------------------------------------
                       Text(
                         product.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontWeight: FontWeight.w700,
-                          fontSize: 14,
+                          fontSize: 13,
                         ),
                       ),
 
                       const SizedBox(height: 5),
 
-                      // ==================================================
+                      // ----------------------------------------------------
                       // PRICE
-                      // ==================================================
+                      // ----------------------------------------------------
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
@@ -1298,20 +1310,19 @@ class _ProductCard extends StatelessWidget {
                             style: TextStyle(
                               color: colorScheme.primary,
                               fontWeight: FontWeight.w800,
-                              fontSize: 16,
+                              fontSize: 15,
                             ),
                           ),
 
                           if (product.hasDiscount) ...[
-                            const SizedBox(width: 7),
-
+                            const SizedBox(width: 6),
                             Flexible(
                               child: Text(
                                 '₹${product.originalPrice.toStringAsFixed(2)}',
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   color: colorScheme.onSurfaceVariant,
-                                  fontSize: 11,
+                                  fontSize: 10,
                                   decoration: TextDecoration.lineThrough,
                                 ),
                               ),
@@ -1320,16 +1331,19 @@ class _ProductCard extends StatelessWidget {
                         ],
                       ),
 
-                      const Spacer(),
+                      // ----------------------------------------------------
+                      // CONTROLLED GAP
+                      // ----------------------------------------------------
+                      const SizedBox(height: 8),
 
-                      // ==================================================
+                      // ----------------------------------------------------
                       // STOCK + CART
-                      // ==================================================
+                      // ----------------------------------------------------
                       Row(
                         children: [
                           Container(
-                            width: 7,
-                            height: 7,
+                            width: 6,
+                            height: 6,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: isOutOfStock
@@ -1338,7 +1352,7 @@ class _ProductCard extends StatelessWidget {
                             ),
                           ),
 
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 5),
 
                           Expanded(
                             child: Text(
@@ -1348,7 +1362,7 @@ class _ProductCard extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                fontSize: 11,
+                                fontSize: 10,
                                 color: colorScheme.onSurfaceVariant,
                               ),
                             ),
@@ -1357,15 +1371,15 @@ class _ProductCard extends StatelessWidget {
                           const SizedBox(width: 6),
 
                           Container(
-                            width: 34,
-                            height: 34,
+                            width: 32,
+                            height: 32,
                             decoration: BoxDecoration(
                               color: colorScheme.primaryContainer,
-                              borderRadius: BorderRadius.circular(10),
+                              borderRadius: BorderRadius.circular(9),
                             ),
                             child: Icon(
                               Icons.shopping_cart_outlined,
-                              size: 18,
+                              size: 17,
                               color: colorScheme.primary,
                             ),
                           ),
@@ -1547,9 +1561,7 @@ class _CategoryCard extends StatelessWidget {
                   color: selected ? Colors.white : colorScheme.primary,
                 ),
               ),
-
               const SizedBox(height: 9),
-
               Text(
                 name,
                 maxLines: 2,
@@ -1614,16 +1626,12 @@ class _ErrorView extends StatelessWidget {
               size: 55,
               color: colorScheme.onSurfaceVariant,
             ),
-
             const SizedBox(height: 12),
-
             const Text(
               'Unable to load products',
               style: TextStyle(fontWeight: FontWeight.w700),
             ),
-
             const SizedBox(height: 12),
-
             FilledButton(onPressed: onRetry, child: const Text('Retry')),
           ],
         ),
@@ -1656,16 +1664,12 @@ class _EmptyProductsView extends StatelessWidget {
             size: 55,
             color: colorScheme.onSurfaceVariant,
           ),
-
           const SizedBox(height: 12),
-
           const Text(
             'No products available',
             style: TextStyle(fontWeight: FontWeight.w700),
           ),
-
           const SizedBox(height: 5),
-
           Text(
             'Products added by merchants will appear here.',
             textAlign: TextAlign.center,

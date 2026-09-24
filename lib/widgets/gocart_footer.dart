@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../models/product_category.dart';
 import '../screens/login_screen.dart';
 
 class GoCartFooter extends StatelessWidget {
@@ -20,7 +19,8 @@ class GoCartFooter extends StatelessWidget {
 
   // Add the official GoCart Instagram URL here when it is provided.
   // Keeping it in this file means the Home screen never needs to change.
-  static const String instagramUrl = '';
+  static const String instagramUrl =
+      'https://www.instagram.com/gocart.og?stkn=aDFtZjBlcmcwMmVi';
 
   static const List<String> customerCareItems = [
     'Help Center & FAQ',
@@ -76,7 +76,7 @@ class GoCartFooter extends StatelessWidget {
                   return Row(
                     children: [
                       Text(
-                        '© ${DateTime.now().year} GoCart. All rights reserved.',
+                        '© ${DateTime.now().year} GoCart. DMM-dev. All rights reserved.',
                         style: const TextStyle(
                           color: footerMuted,
                           fontSize: 11,
@@ -95,6 +95,10 @@ class GoCartFooter extends StatelessWidget {
     );
   }
 }
+
+// ============================================================================
+// FOOTER MAIN
+// ============================================================================
 
 class _FooterMain extends StatelessWidget {
   final ValueChanged<String> onCategorySelected;
@@ -139,6 +143,10 @@ class _FooterMain extends StatelessWidget {
     );
   }
 }
+
+// ============================================================================
+// BRAND
+// ============================================================================
 
 class _FooterBrand extends StatelessWidget {
   const _FooterBrand();
@@ -227,6 +235,10 @@ class _FooterBrand extends StatelessWidget {
   }
 }
 
+// ============================================================================
+// CATEGORIES
+// ============================================================================
+
 class _FooterCategories extends StatelessWidget {
   final ValueChanged<String> onCategorySelected;
 
@@ -234,23 +246,15 @@ class _FooterCategories extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Keep the footer synchronized with the buyer category model.
-    // Automotive is excluded because it is not part of the current buyer
-    // category navigation shown on the Home screen.
-    final categories = ProductCategory.all
-        .where((category) => category.name != 'Automotive')
-        .toList();
-
-    final firstColumn = <String>['All Products'];
-    final secondColumn = <String>[];
-
-    for (var index = 0; index < categories.length; index++) {
-      if (index.isEven) {
-        firstColumn.add(categories[index].name);
-      } else {
-        secondColumn.add(categories[index].name);
-      }
-    }
+    // Keep the footer compact.
+    // The full category list is still available on the Home page.
+    const categories = [
+      'All Products',
+      'Electronics',
+      'Fashion',
+      'Beauty',
+      'Home',
+    ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -267,24 +271,21 @@ class _FooterCategories extends StatelessWidget {
             if (isNarrow) {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ...firstColumn.map(
-                    (item) => _FooterCategoryLink(
-                      label: item,
-                      onTap: () => onCategorySelected(
-                        item == 'All Products' ? 'All' : item,
-                      ),
+                children: categories.map((item) {
+                  return _FooterCategoryLink(
+                    label: item,
+                    onTap: () => onCategorySelected(
+                      item == 'All Products' ? 'All' : item,
                     ),
-                  ),
-                  ...secondColumn.map(
-                    (item) => _FooterCategoryLink(
-                      label: item,
-                      onTap: () => onCategorySelected(item),
-                    ),
-                  ),
-                ],
+                  );
+                }).toList(),
               );
             }
+
+            // Desktop/tablet:
+            // 3 items in the first column and 2 in the second.
+            final firstColumn = categories.take(3).toList();
+            final secondColumn = categories.skip(3).toList();
 
             return Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -292,30 +293,28 @@ class _FooterCategories extends StatelessWidget {
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: firstColumn
-                        .map(
-                          (item) => _FooterCategoryLink(
-                            label: item,
-                            onTap: () => onCategorySelected(
-                              item == 'All Products' ? 'All' : item,
-                            ),
-                          ),
-                        )
-                        .toList(),
+                    children: firstColumn.map((item) {
+                      return _FooterCategoryLink(
+                        label: item,
+                        onTap: () => onCategorySelected(
+                          item == 'All Products' ? 'All' : item,
+                        ),
+                      );
+                    }).toList(),
                   ),
                 ),
                 const SizedBox(width: 22),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: secondColumn
-                        .map(
-                          (item) => _FooterCategoryLink(
-                            label: item,
-                            onTap: () => onCategorySelected(item),
-                          ),
-                        )
-                        .toList(),
+                    children: secondColumn.map((item) {
+                      return _FooterCategoryLink(
+                        label: item,
+                        onTap: () => onCategorySelected(
+                          item == 'All Products' ? 'All' : item,
+                        ),
+                      );
+                    }).toList(),
                   ),
                 ),
               ],
@@ -326,6 +325,10 @@ class _FooterCategories extends StatelessWidget {
     );
   }
 }
+
+// ============================================================================
+// CUSTOMER CARE
+// ============================================================================
 
 class _FooterCustomerCare extends StatelessWidget {
   const _FooterCustomerCare();
@@ -346,6 +349,10 @@ class _FooterCustomerCare extends StatelessWidget {
     );
   }
 }
+
+// ============================================================================
+// SELLER
+// ============================================================================
 
 class _FooterSeller extends StatelessWidget {
   const _FooterSeller();
@@ -391,7 +398,7 @@ class _FooterSeller extends StatelessWidget {
             child: Ink(
               padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
+                gradient: const LinearGradient(
                   colors: [
                     GoCartFooter.footerSurfaceLight,
                     GoCartFooter.footerSurface,
@@ -429,6 +436,10 @@ class _FooterSeller extends StatelessWidget {
   }
 }
 
+// ============================================================================
+// LINK COLUMN
+// ============================================================================
+
 class _FooterLinkColumn extends StatelessWidget {
   final String eyebrow;
   final String title;
@@ -456,6 +467,10 @@ class _FooterLinkColumn extends StatelessWidget {
     );
   }
 }
+
+// ============================================================================
+// SECTION HEADING
+// ============================================================================
 
 class _FooterSectionHeading extends StatelessWidget {
   final String eyebrow;
@@ -491,6 +506,10 @@ class _FooterSectionHeading extends StatelessWidget {
     );
   }
 }
+
+// ============================================================================
+// CATEGORY LINK
+// ============================================================================
 
 class _FooterCategoryLink extends StatefulWidget {
   final String label;
@@ -547,6 +566,10 @@ class _FooterCategoryLinkState extends State<_FooterCategoryLink> {
   }
 }
 
+// ============================================================================
+// TEXT LINK
+// ============================================================================
+
 class _FooterTextLink extends StatefulWidget {
   final String label;
   final VoidCallback onTap;
@@ -599,6 +622,10 @@ class _FooterTextLinkState extends State<_FooterTextLink> {
     );
   }
 }
+
+// ============================================================================
+// SOCIAL BUTTON
+// ============================================================================
 
 class _FooterSocialButton extends StatefulWidget {
   final IconData icon;
@@ -678,6 +705,10 @@ class _FooterSocialButtonState extends State<_FooterSocialButton> {
   }
 }
 
+// ============================================================================
+// LEGAL LINKS
+// ============================================================================
+
 class _FooterLegalLinks extends StatelessWidget {
   const _FooterLegalLinks();
 
@@ -704,35 +735,55 @@ class _FooterLegalLinks extends StatelessWidget {
   }
 }
 
+// ============================================================================
+// CUSTOMER CARE MESSAGES
+// ============================================================================
+
 String _customerCareMessage(String item) {
   switch (item) {
     case 'Help Center & FAQ':
       return 'Help and frequently asked questions will be available here. This is ready to be connected to a dedicated help page later.';
+
     case 'Track Your Order':
       return 'Order tracking will appear here once the GoCart order system is connected.';
+
     case 'Returns & Exchanges':
       return 'Return and exchange information will be added here when those policies are finalized.';
+
     case 'Shipping Policy':
       return 'Shipping information will be added here when the delivery policy is finalized.';
+
     case 'Contact Support':
       return 'Support contact details can be connected here once the official support channel is configured.';
+
     default:
       return 'This section is ready to be connected.';
   }
 }
 
+// ============================================================================
+// LEGAL MESSAGES
+// ============================================================================
+
 String _legalMessage(String item) {
   switch (item) {
     case 'Privacy Policy':
       return 'The GoCart privacy policy page can be connected here when the final policy is ready.';
+
     case 'Terms & Conditions':
       return 'The GoCart terms and conditions page can be connected here when the final terms are ready.';
+
     case 'Help & Support':
       return 'Help and support information can be connected here when the dedicated support page is ready.';
+
     default:
       return 'This page is ready to be connected.';
   }
 }
+
+// ============================================================================
+// FOOTER INFO DIALOG
+// ============================================================================
 
 void _showFooterInfoDialog(
   BuildContext context, {
@@ -752,7 +803,9 @@ void _showFooterInfoDialog(
         ),
         actions: [
           FilledButton(
-            onPressed: () => Navigator.pop(dialogContext),
+            onPressed: () {
+              Navigator.pop(dialogContext);
+            },
             style: FilledButton.styleFrom(
               backgroundColor: GoCartFooter.footerAccent,
               foregroundColor: Colors.white,

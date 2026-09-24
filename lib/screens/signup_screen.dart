@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -26,6 +28,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
   bool isLoading = false;
   bool isPasswordVisible = false;
+  bool isMerchantPending = false;
 
   @override
   void dispose() {
@@ -75,26 +78,38 @@ class _SignupScreenState extends State<SignupScreen> {
         return;
       }
 
+      // ================================================================
+      // MERCHANT SIGNUP
+      // ================================================================
       if (selectedRole == 'merchant') {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const MerchantDashboardScreen(),
-          ),
-        );
-      } else {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const UserHomeScreen()),
-        );
+        await _waitForMerchantApproval();
+        return;
       }
+
+      // ================================================================
+      // BUYER SIGNUP
+      // ================================================================
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const UserHomeScreen()),
+        (route) => false,
+      );
     } on AuthException catch (error) {
       if (mounted) {
         _showMessage(error.message, isError: true);
       }
+    } on PostgrestException catch (error) {
+      if (mounted) {
+        _showMessage(
+          error.message.isNotEmpty
+              ? error.message
+              : 'Could not create your profile.',
+          isError: true,
+        );
+      }
     } catch (error) {
       if (mounted) {
-        _showMessage('Something went wrong: $error', isError: true);
+        _showMessage('Something went wrong. Please try again.', isError: true);
       }
     } finally {
       if (mounted) {
@@ -104,6 +119,88 @@ class _SignupScreenState extends State<SignupScreen> {
       }
     }
   }
+
+  // ==========================================================================
+  // MERCHANT AUTO APPROVAL
+  // ==========================================================================
+
+  Future<void> _waitForMerchantApproval() async {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      isMerchantPending = true;
+    });
+
+    // Give the user a clear pending state for 5 seconds.
+    await Future<void>.delayed(const Duration(seconds: 5));
+
+    if (!mounted) {
+      return;
+    }
+
+    bool approved = false;
+
+    // The database itself checks that at least 5 seconds have passed.
+    // We retry a couple of times to handle tiny timing differences.
+    for (int attempt = 0; attempt < 3; attempt++) {
+      try {
+        final result = await Supabase.instance.client.rpc(
+          'approve_my_merchant_account',
+        );
+
+        approved = result == true;
+
+        if (approved) {
+          break;
+        }
+
+        if (attempt < 2) {
+          await Future<void>.delayed(const Duration(milliseconds: 500));
+        }
+      } catch (_) {
+        if (attempt < 2) {
+          await Future<void>.delayed(const Duration(milliseconds: 500));
+        }
+      }
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    if (!approved) {
+      setState(() {
+        isMerchantPending = false;
+        isLoading = false;
+      });
+
+      _showMessage(
+        'Your merchant account is still being prepared. Please sign in again in a moment.',
+        isError: true,
+      );
+
+      return;
+    }
+
+    // Refresh the current session/profile state before navigating.
+    await Supabase.instance.client.auth.refreshSession();
+
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => const MerchantDashboardScreen()),
+      (route) => false,
+    );
+  }
+
+  // ==========================================================================
+  // SHOW MESSAGE
+  // ==========================================================================
 
   void _showMessage(String message, {required bool isError}) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -123,6 +220,10 @@ class _SignupScreenState extends State<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (isMerchantPending) {
+      return _buildMerchantPendingScreen();
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xFFFFF9FF),
       body: SafeArea(
@@ -170,7 +271,6 @@ class _SignupScreenState extends State<SignupScreen> {
                               foregroundColor: const Color(0xFF5F5365),
                             ),
                           ),
-
                           if (isWide)
                             Row(
                               children: [
@@ -437,9 +537,7 @@ class _SignupScreenState extends State<SignupScreen> {
                                               },
                                       ),
                                     ),
-
                                     const SizedBox(width: 14),
-
                                     Expanded(
                                       child: _RoleOption(
                                         title: 'Merchant',
@@ -475,9 +573,7 @@ class _SignupScreenState extends State<SignupScreen> {
                                               });
                                             },
                                     ),
-
                                     const SizedBox(height: 12),
-
                                     _RoleOption(
                                       title: 'Merchant',
                                       description:
@@ -656,6 +752,146 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   // ==========================================================================
+  // MERCHANT PENDING SCREEN
+  // ==========================================================================
+
+  Widget _buildMerchantPendingScreen() {
+    return Scaffold(
+      backgroundColor: const Color(0xFFFFF9FF),
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(32),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(26),
+                  border: Border.all(color: const Color(0xFFE4D9E9)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF6F4B9B).withValues(alpha: 0.10),
+                      blurRadius: 30,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const GoCartLogo(width: 155),
+
+                    const SizedBox(height: 32),
+
+                    Container(
+                      width: 76,
+                      height: 76,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF1E5FF),
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: const Icon(
+                        Icons.storefront_outlined,
+                        size: 38,
+                        color: Color(0xFF6F4B9B),
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    const Text(
+                      'Setting up your merchant account',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 23,
+                        fontWeight: FontWeight.w800,
+                        color: Color(0xFF21172A),
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    Text(
+                      'Your merchant account is being prepared. '
+                      'This will only take a few seconds.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        height: 1.5,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+
+                    const SizedBox(height: 28),
+
+                    const SizedBox(
+                      width: 30,
+                      height: 30,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 3,
+                        color: Color(0xFF6F4B9B),
+                      ),
+                    ),
+
+                    const SizedBox(height: 18),
+
+                    Text(
+                      'Please wait...',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+
+                    const SizedBox(height: 28),
+
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF8F3FB),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.lock_outline_rounded,
+                            size: 18,
+                            color: Color(0xFF6F4B9B),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Your account is being securely prepared.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                height: 1.4,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ==========================================================================
   // INPUT DECORATION
   // ==========================================================================
 
@@ -666,40 +902,30 @@ class _SignupScreenState extends State<SignupScreen> {
   }) {
     return InputDecoration(
       hintText: hint,
-
       prefixIcon: Icon(icon, color: const Color(0xFF6F4B9B)),
-
       suffixIcon: suffix,
-
       filled: true,
-
       fillColor: const Color(0xFFFAF7FC),
-
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: BorderSide.none,
       ),
-
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(color: Color(0xFFE4D9E9)),
       ),
-
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(color: Color(0xFF6F4B9B), width: 1.5),
       ),
-
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(color: Color(0xFFE57373)),
       ),
-
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: const BorderSide(color: Color(0xFFE53935), width: 1.5),
       ),
-
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
     );
   }

@@ -9,7 +9,9 @@ import 'merchant_profile_screen.dart';
 import 'user_home_screen.dart';
 
 class ProfileScreen extends ConsumerWidget {
-  const ProfileScreen({super.key});
+  final VoidCallback? onBuyerBack;
+
+  const ProfileScreen({super.key, this.onBuyerBack});
 
   void _openHome(BuildContext context) {
     Navigator.of(context).pushAndRemoveUntil(
@@ -114,15 +116,31 @@ class ProfileScreen extends ConsumerWidget {
         );
       },
       data: (profile) {
+        // ----------------------------------------------------------
+        // MERCHANT PROFILE
+        // ----------------------------------------------------------
         if (profile.isMerchant) {
           return const MerchantProfileScreen();
         }
 
-        return const BuyerProfileScreen();
+        // ----------------------------------------------------------
+        // BUYER PROFILE
+        // ----------------------------------------------------------
+        return BuyerProfileScreen(
+          onBack:
+              onBuyerBack ??
+              () {
+                Navigator.of(context).maybePop();
+              },
+        );
       },
     );
   }
 }
+
+// ============================================================================
+// GUEST PROFILE
+// ============================================================================
 
 class _GuestProfileScreen extends StatelessWidget {
   final VoidCallback onLogin;
@@ -146,7 +164,9 @@ class _GuestProfileScreen extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Guest icon
+                  // ==========================================================
+                  // GUEST ICON
+                  // ==========================================================
                   Container(
                     width: 100,
                     height: 100,
@@ -163,6 +183,9 @@ class _GuestProfileScreen extends StatelessWidget {
 
                   const SizedBox(height: 28),
 
+                  // ==========================================================
+                  // TITLE
+                  // ==========================================================
                   const Text(
                     'Welcome to GoCart',
                     textAlign: TextAlign.center,
@@ -175,6 +198,9 @@ class _GuestProfileScreen extends StatelessWidget {
 
                   const SizedBox(height: 12),
 
+                  // ==========================================================
+                  // DESCRIPTION
+                  // ==========================================================
                   Text(
                     'You are currently browsing as a guest. '
                     'Login or create an account to manage your profile, '
@@ -189,7 +215,9 @@ class _GuestProfileScreen extends StatelessWidget {
 
                   const SizedBox(height: 30),
 
-                  // Login button
+                  // ==========================================================
+                  // LOGIN
+                  // ==========================================================
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton(
@@ -214,7 +242,9 @@ class _GuestProfileScreen extends StatelessWidget {
 
                   const SizedBox(height: 12),
 
-                  // Continue browsing
+                  // ==========================================================
+                  // CONTINUE BROWSING
+                  // ==========================================================
                   TextButton(
                     onPressed: onContinueBrowsing,
                     style: TextButton.styleFrom(
