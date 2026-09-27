@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/profile_provider.dart';
 import 'cart_screen.dart';
+import 'order_history_screen.dart';
 import 'user_home_screen.dart';
 
 class BuyerProfileScreen extends ConsumerStatefulWidget {
@@ -26,7 +27,7 @@ class _BuyerProfileScreenState extends ConsumerState<BuyerProfileScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: const Color(0xFFFFF9FF),
+          backgroundColor: const Color(0xFFFBF6F0),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24),
           ),
@@ -64,7 +65,7 @@ class _BuyerProfileScreenState extends ConsumerState<BuyerProfileScreen> {
                 Navigator.pop(dialogContext, true);
               },
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF6F4B9B),
+                backgroundColor: const Color(0xFF541B3D),
                 foregroundColor: Colors.white,
               ),
               child: const Text('Save'),
@@ -132,7 +133,7 @@ class _BuyerProfileScreenState extends ConsumerState<BuyerProfileScreen> {
       context: context,
       builder: (dialogContext) {
         return Dialog(
-          backgroundColor: const Color(0xFFFFF9FF),
+          backgroundColor: const Color(0xFFFBF6F0),
           insetPadding: const EdgeInsets.symmetric(
             horizontal: 24,
             vertical: 24,
@@ -157,12 +158,12 @@ class _BuyerProfileScreenState extends ConsumerState<BuyerProfileScreen> {
                         width: 52,
                         height: 52,
                         decoration: BoxDecoration(
-                          color: const Color(0xFFEFE5FA),
+                          color: const Color(0xFFF4E8E7),
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: const Icon(
                           Icons.person_outline_rounded,
-                          color: Color(0xFF6F4B9B),
+                          color: Color(0xFF541B3D),
                           size: 27,
                         ),
                       ),
@@ -218,7 +219,7 @@ class _BuyerProfileScreenState extends ConsumerState<BuyerProfileScreen> {
                       icon: const Icon(
                         Icons.edit_outlined,
                         size: 19,
-                        color: Color(0xFF6F4B9B),
+                        color: Color(0xFF541B3D),
                       ),
                     ),
                   ),
@@ -237,7 +238,7 @@ class _BuyerProfileScreenState extends ConsumerState<BuyerProfileScreen> {
                     trailing: const Icon(
                       Icons.verified_outlined,
                       size: 19,
-                      color: Color(0xFF6F4B9B),
+                      color: Color(0xFF541B3D),
                     ),
                   ),
 
@@ -253,7 +254,7 @@ class _BuyerProfileScreenState extends ConsumerState<BuyerProfileScreen> {
                     trailing: const Icon(
                       Icons.check_circle_outline_rounded,
                       size: 19,
-                      color: Color(0xFF6F4B9B),
+                      color: Color(0xFF541B3D),
                     ),
                   ),
 
@@ -271,7 +272,7 @@ class _BuyerProfileScreenState extends ConsumerState<BuyerProfileScreen> {
                         _showEditNameDialog(currentName: profile.name);
                       },
                       style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF6F4B9B),
+                        backgroundColor: const Color(0xFF541B3D),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
@@ -303,7 +304,7 @@ class _BuyerProfileScreenState extends ConsumerState<BuyerProfileScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          backgroundColor: const Color(0xFFFFF9FF),
+          backgroundColor: const Color(0xFFFBF6F0),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(22),
           ),
@@ -373,12 +374,12 @@ class _BuyerProfileScreenState extends ConsumerState<BuyerProfileScreen> {
     final profileAsync = ref.watch(profileProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF9FF),
+      backgroundColor: const Color(0xFFFBF6F0),
       body: SafeArea(
         child: profileAsync.when(
           loading: () {
             return const Center(
-              child: CircularProgressIndicator(color: Color(0xFF6F4B9B)),
+              child: CircularProgressIndicator(color: Color(0xFF541B3D)),
             );
           },
           error: (error, stackTrace) {
@@ -390,7 +391,7 @@ class _BuyerProfileScreenState extends ConsumerState<BuyerProfileScreen> {
           },
           data: (profile) {
             return RefreshIndicator(
-              color: const Color(0xFF6F4B9B),
+              color: const Color(0xFF541B3D),
               onRefresh: () async {
                 await ref.read(profileProvider.notifier).refreshProfile();
               },
@@ -443,7 +444,7 @@ class _BuyerProfileScreenState extends ConsumerState<BuyerProfileScreen> {
                                   width: 68,
                                   height: 68,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF6F4B9B),
+                                    color: const Color(0xFF541B3D),
                                     borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: const Icon(
@@ -486,7 +487,7 @@ class _BuyerProfileScreenState extends ConsumerState<BuyerProfileScreen> {
                                           vertical: 5,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: const Color(0xFFEFE5FA),
+                                          color: const Color(0xFFF4E8E7),
                                           borderRadius: BorderRadius.circular(
                                             20,
                                           ),
@@ -494,7 +495,7 @@ class _BuyerProfileScreenState extends ConsumerState<BuyerProfileScreen> {
                                         child: const Text(
                                           'Buyer Account',
                                           style: TextStyle(
-                                            color: Color(0xFF6F4B9B),
+                                            color: Color(0xFF541B3D),
                                             fontSize: 11,
                                             fontWeight: FontWeight.w700,
                                           ),
@@ -539,16 +540,12 @@ class _BuyerProfileScreenState extends ConsumerState<BuyerProfileScreen> {
                             icon: Icons.receipt_long_outlined,
                             title: 'My Orders',
                             subtitle: 'View your order history',
-                            onTap: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Orders will be available soon.',
-                                  ),
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                            },
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const OrderHistoryScreen(),
+                              ),
+                            ),
                           ),
 
                           const SizedBox(height: 10),
@@ -666,7 +663,7 @@ class _ProfileMenuItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final iconColor = isDanger ? Colors.red.shade600 : const Color(0xFF6F4B9B);
+    final iconColor = isDanger ? Colors.red.shade600 : const Color(0xFF541B3D);
 
     return Material(
       color: Colors.white,
@@ -690,7 +687,7 @@ class _ProfileMenuItem extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: isDanger
                       ? Colors.red.shade50
-                      : const Color(0xFFF0E8F8),
+                      : const Color(0xFFF4E8E7),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(icon, color: iconColor, size: 23),
@@ -759,10 +756,10 @@ class _InformationRow extends StatelessWidget {
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: const Color(0xFFF0E8F8),
+              color: const Color(0xFFF4E8E7),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon, color: const Color(0xFF6F4B9B), size: 20),
+            child: Icon(icon, color: const Color(0xFF541B3D), size: 20),
           ),
           const SizedBox(width: 13),
           Expanded(
@@ -836,7 +833,7 @@ class _ProfileErrorView extends StatelessWidget {
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('Try Again'),
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF6F4B9B),
+                backgroundColor: const Color(0xFF541B3D),
                 foregroundColor: Colors.white,
               ),
             ),

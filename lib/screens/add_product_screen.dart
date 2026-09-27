@@ -6,15 +6,21 @@ import 'package:image_picker/image_picker.dart';
 
 import '../models/product_category.dart';
 import '../providers/product_provider.dart';
+import '../theme/app_theme.dart';
+import '../widgets/product_form_components.dart';
 
 class AddProductScreen extends ConsumerStatefulWidget {
-  const AddProductScreen({super.key});
+  final String merchantId;
+
+  const AddProductScreen({super.key, required this.merchantId});
 
   @override
   ConsumerState<AddProductScreen> createState() => _AddProductScreenState();
 }
 
 class _AddProductScreenState extends ConsumerState<AddProductScreen> {
+  static const int _maxImageSizeBytes = 5 * 1024 * 1024;
+
   final _formKey = GlobalKey<FormState>();
 
   final nameController = TextEditingController();
@@ -69,6 +75,20 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
       final bytes = await image.readAsBytes();
 
       if (!mounted) {
+        return;
+      }
+
+      if (bytes.isEmpty || bytes.length > _maxImageSizeBytes) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              bytes.isEmpty
+                  ? 'The selected image could not be read.'
+                  : 'Image size must be 5 MB or less.',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
         return;
       }
 
@@ -150,7 +170,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
     try {
       await ref
-          .read(myProductsProvider.notifier)
+          .read(myProductsProvider(widget.merchantId).notifier)
           .addProduct(
             name: nameController.text.trim(),
             description: descriptionController.text.trim(),
@@ -224,7 +244,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
     final price = double.tryParse(value.trim());
 
-    if (price == null || price <= 0) {
+    if (price == null || !price.isFinite || price <= 0) {
       return 'Enter a valid price greater than 0';
     }
 
@@ -238,7 +258,7 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
 
     final offerPrice = double.tryParse(value.trim());
 
-    if (offerPrice == null || offerPrice <= 0) {
+    if (offerPrice == null || !offerPrice.isFinite || offerPrice <= 0) {
       return 'Enter a valid price greater than 0';
     }
 
@@ -273,15 +293,270 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isWide = MediaQuery.sizeOf(context).width >= 1080;
+
+    final basicInformation = ProductFormSection(
+      icon: Icons.edit_note_rounded,
+      title: 'Product details',
+      subtitle: 'Give your listing a clear name and description.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const _FieldLabel(text: 'Product name'),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: nameController,
+            enabled: !isSaving,
+            textCapitalization: TextCapitalization.sentences,
+            textInputAction: TextInputAction.next,
+            maxLength: 150,
+            decoration: const InputDecoration(
+              hintText: 'e.g. Wireless Headphones',
+              prefixIcon: Icon(Icons.shopping_bag_outlined),
+              counterText: '',
+            ),
+            onChanged: (_) => setState(() {}),
+            validator: validateName,
+          ),
+          const SizedBox(height: 18),
+          const _FieldLabel(text: 'Description'),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: descriptionController,
+            enabled: !isSaving,
+            minLines: 4,
+            maxLines: 6,
+            textCapitalization: TextCapitalization.sentences,
+            textInputAction: TextInputAction.next,
+            decoration: const InputDecoration(
+              hintText: 'Describe the features and benefits of your product.',
+              alignLabelWithHint: true,
+            ),
+            onChanged: (_) => setState(() {}),
+            validator: validateDescription,
+          ),
+          const SizedBox(height: 18),
+          const _FieldLabel(text: 'Category'),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            initialValue: selectedCategory,
+            decoration: const InputDecoration(
+              prefixIcon: Icon(Icons.category_outlined),
+            ),
+            items: ProductCategory.all.map((category) {
+              return DropdownMenuItem<String>(
+                value: category.name,
+                child: Row(
+                  children: [
+                    Icon(category.icon, size: 20, color: colorScheme.primary),
+                    const SizedBox(width: 10),
+                    Text(category.name),
+                  ],
+                ),
+              );
+            }).toList(),
+            onChanged: isSaving
+                ? null
+                : (value) {
+                    if (value == null) return;
+                    setState(() => selectedCategory = value);
+                  },
+          ),
+        ],
+      ),
+    );
+
+    final productImage = ProductFormSection(
+      icon: Icons.add_photo_alternate_outlined,
+      title: 'Product photography',
+      subtitle: 'Use a clear, well-lit photo to showcase your product.',
+      child: Column(
+        children: [
+          _ImagePreview(
+            imageBytes: selectedImageBytes,
+            onRemove: selectedImage == null ? null : removeSelectedImage,
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: FilledButton.icon(
+              onPressed: isSaving ? null : pickImage,
+              icon: const Icon(Icons.photo_library_outlined),
+              label: Text(
+                selectedImage == null
+                    ? 'Choose product photo'
+                    : 'Replace photo',
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'JPG, PNG or WebP · Up to 5 MB',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final priceAndInventory = ProductFormSection(
+      icon: Icons.price_change_outlined,
+      title: 'Price & inventory',
+      subtitle: 'Set your pricing and available quantity.',
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 520;
+
+          final originalPriceField = Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const _FieldLabel(text: 'Original price'),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: originalPriceController,
+                enabled: !isSaving,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  hintText: '2999.00',
+                  prefixText: '₹ ',
+                ),
+                onChanged: (_) => setState(() {}),
+                validator: validateOriginalPrice,
+              ),
+            ],
+          );
+
+          final offerPriceField = Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const _FieldLabel(text: 'Offer price'),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: offerPriceController,
+                enabled: !isSaving,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  hintText: '2399.00',
+                  prefixText: '₹ ',
+                  prefixIcon: Icon(Icons.local_offer_outlined),
+                ),
+                onChanged: (_) => setState(() {}),
+                validator: validateOfferPrice,
+              ),
+            ],
+          );
+
+          final stockField = Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const _FieldLabel(text: 'Available stock'),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: stockController,
+                enabled: !isSaving,
+                keyboardType: const TextInputType.numberWithOptions(
+                  signed: false,
+                ),
+                textInputAction: TextInputAction.done,
+                decoration: const InputDecoration(
+                  hintText: '25',
+                  prefixIcon: Icon(Icons.inventory_2_outlined),
+                ),
+                onChanged: (_) => setState(() {}),
+                validator: validateStock,
+              ),
+            ],
+          );
+
+          if (isNarrow) {
+            return Column(
+              children: [
+                originalPriceField,
+                const SizedBox(height: 16),
+                offerPriceField,
+                const SizedBox(height: 16),
+                stockField,
+              ],
+            );
+          }
+
+          return Column(
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: originalPriceField),
+                  const SizedBox(width: 14),
+                  Expanded(child: offerPriceField),
+                ],
+              ),
+              const SizedBox(height: 16),
+              stockField,
+            ],
+          );
+        },
+      ),
+    );
+
+    final listingPreview = ProductListingPreview(
+      name: nameController.text.trim(),
+      description: descriptionController.text.trim(),
+      category: selectedCategory,
+      imageBytes: selectedImageBytes,
+      showImagePlaceholder: selectedImageBytes == null,
+      offerPrice: double.tryParse(offerPriceController.text.trim()),
+      originalPrice: double.tryParse(originalPriceController.text.trim()),
+      stock: int.tryParse(stockController.text.trim()),
+    );
+
+    final publishButton = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: 56,
+          child: FilledButton.icon(
+            onPressed: isSaving ? null : saveProduct,
+            icon: isSaving
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2.5),
+                  )
+                : const Icon(Icons.publish_rounded),
+            label: Text(
+              isSaving ? 'Uploading & saving…' : 'Publish product',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          'Your product will appear in your store after it is saved.',
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
 
     return Scaffold(
-      backgroundColor: colorScheme.surface,
+      backgroundColor: GoCartTheme.canvas,
       appBar: AppBar(
         title: const Text(
           'Add Product',
           style: TextStyle(fontWeight: FontWeight.w700),
         ),
-        backgroundColor: colorScheme.surface,
+        backgroundColor: GoCartTheme.canvas,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
       ),
@@ -289,296 +564,159 @@ class _AddProductScreenState extends ConsumerState<AddProductScreen> {
         child: Form(
           key: _formKey,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 36),
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 40),
             children: [
               Center(
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 700),
+                  constraints: const BoxConstraints(maxWidth: 1120),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(
-                        'Create a product',
-                        style: theme.textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.4,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Add the details below to publish a new product to your store.',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // ==================================================
-                      // PRODUCT IMAGE
-                      // ==================================================
-                      _SectionCard(
-                        title: 'Product image',
-                        subtitle:
-                            'Choose a JPG, PNG, or WebP image from your device.',
-                        child: Column(
-                          children: [
-                            _ImagePreview(
-                              imageBytes: selectedImageBytes,
-                              onRemove: selectedImage == null
-                                  ? null
-                                  : removeSelectedImage,
+                      Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [Color(0xFFFFFCF8), Color(0xFFF5E5D9)],
+                          ),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: GoCartTheme.outline),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(
+                                0xFF541B3D,
+                              ).withValues(alpha: 0.05),
+                              blurRadius: 24,
+                              offset: const Offset(0, 10),
                             ),
-                            const SizedBox(height: 16),
-                            SizedBox(
-                              width: double.infinity,
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 50,
                               height: 50,
-                              child: OutlinedButton.icon(
-                                onPressed: isSaving ? null : pickImage,
-                                icon: const Icon(Icons.photo_library_outlined),
-                                label: Text(
-                                  selectedImage == null
-                                      ? 'Choose Image'
-                                      : 'Choose Another Image',
-                                ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF541B3D),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: const Icon(
+                                Icons.add_box_rounded,
+                                color: Colors.white,
+                                size: 25,
                               ),
                             ),
-                            const SizedBox(height: 10),
-                            Text(
-                              'Maximum size: 5 MB',
-                              textAlign: TextAlign.center,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 18),
-
-                      // ==================================================
-                      // BASIC INFORMATION
-                      // ==================================================
-                      _SectionCard(
-                        title: 'Basic information',
-                        subtitle: 'Tell customers what you are selling.',
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            const _FieldLabel(text: 'Product name'),
-                            const SizedBox(height: 8),
-                            TextFormField(
-                              controller: nameController,
-                              textCapitalization: TextCapitalization.sentences,
-                              textInputAction: TextInputAction.next,
-                              decoration: const InputDecoration(
-                                hintText: 'e.g. Wireless Headphones',
-                                prefixIcon: Icon(Icons.shopping_bag_outlined),
-                              ),
-                              validator: validateName,
-                            ),
-
-                            const SizedBox(height: 20),
-
-                            const _FieldLabel(text: 'Description'),
-                            const SizedBox(height: 8),
-                            TextFormField(
-                              controller: descriptionController,
-                              maxLines: 5,
-                              textCapitalization: TextCapitalization.sentences,
-                              decoration: const InputDecoration(
-                                hintText: 'Describe your product...',
-                                prefixIcon: Icon(Icons.description_outlined),
-                                alignLabelWithHint: true,
-                              ),
-                              validator: validateDescription,
-                            ),
-
-                            const SizedBox(height: 20),
-
-                            const _FieldLabel(text: 'Category'),
-                            const SizedBox(height: 8),
-
-                            DropdownButtonFormField<String>(
-                              initialValue: selectedCategory,
-                              decoration: const InputDecoration(
-                                prefixIcon: Icon(Icons.category_outlined),
-                              ),
-                              items: ProductCategory.all.map((category) {
-                                return DropdownMenuItem<String>(
-                                  value: category.name,
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        category.icon,
-                                        size: 20,
-                                        color: colorScheme.primary,
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Text(category.name),
-                                    ],
-                                  ),
-                                );
-                              }).toList(),
-                              onChanged: isSaving
-                                  ? null
-                                  : (value) {
-                                      if (value == null) {
-                                        return;
-                                      }
-
-                                      setState(() {
-                                        selectedCategory = value;
-                                      });
-                                    },
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      const SizedBox(height: 18),
-
-                      // ==================================================
-                      // PRICE & INVENTORY
-                      // ==================================================
-                      _SectionCard(
-                        title: 'Price & inventory',
-                        subtitle:
-                            'Set the original price, offer price, and stock.',
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final isNarrow = constraints.maxWidth < 500;
-
-                            final originalPriceField = Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                const _FieldLabel(text: 'Original price'),
-                                const SizedBox(height: 8),
-                                TextFormField(
-                                  controller: originalPriceController,
-                                  keyboardType:
-                                      const TextInputType.numberWithOptions(
-                                        decimal: true,
-                                      ),
-                                  decoration: const InputDecoration(
-                                    hintText: '2999.00',
-                                    prefixText: '₹ ',
-                                    prefixIcon: Icon(Icons.currency_rupee),
-                                  ),
-                                  validator: validateOriginalPrice,
-                                ),
-                              ],
-                            );
-
-                            final offerPriceField = Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                const _FieldLabel(text: 'Offer price'),
-                                const SizedBox(height: 8),
-                                TextFormField(
-                                  controller: offerPriceController,
-                                  keyboardType:
-                                      const TextInputType.numberWithOptions(
-                                        decimal: true,
-                                      ),
-                                  decoration: const InputDecoration(
-                                    hintText: '2399.00',
-                                    prefixText: '₹ ',
-                                    prefixIcon: Icon(
-                                      Icons.local_offer_outlined,
-                                    ),
-                                  ),
-                                  validator: validateOfferPrice,
-                                ),
-                              ],
-                            );
-
-                            final stockField = Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                const _FieldLabel(text: 'Stock'),
-                                const SizedBox(height: 8),
-                                TextFormField(
-                                  controller: stockController,
-                                  keyboardType: TextInputType.number,
-                                  decoration: const InputDecoration(
-                                    hintText: '25',
-                                    prefixIcon: Icon(
-                                      Icons.inventory_2_outlined,
-                                    ),
-                                  ),
-                                  validator: validateStock,
-                                ),
-                              ],
-                            );
-
-                            if (isNarrow) {
-                              return Column(
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  originalPriceField,
-                                  const SizedBox(height: 16),
-                                  offerPriceField,
-                                  const SizedBox(height: 16),
-                                  stockField,
+                                  Text(
+                                    'MERCHANT STUDIO  ·  NEW LISTING',
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: colorScheme.primary,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 1.1,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 5),
+                                  Text(
+                                    'Add a product',
+                                    style: theme.textTheme.headlineMedium
+                                        ?.copyWith(fontSize: 28),
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    'Create a polished listing for your store.',
+                                    style: theme.textTheme.bodyMedium?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
                                 ],
-                              );
-                            }
-
-                            return Column(
-                              children: [
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                              ),
+                            ),
+                            if (isWide)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 13,
+                                  vertical: 9,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.8),
+                                  borderRadius: BorderRadius.circular(30),
+                                  border: Border.all(
+                                    color: const Color(0xFFEAD8C9),
+                                  ),
+                                ),
+                                child: const Row(
                                   children: [
-                                    Expanded(child: originalPriceField),
-                                    const SizedBox(width: 14),
-                                    Expanded(child: offerPriceField),
+                                    Icon(
+                                      Icons.verified_outlined,
+                                      size: 16,
+                                      color: Color(0xFF541B3D),
+                                    ),
+                                    SizedBox(width: 7),
+                                    Text(
+                                      'STORE LISTING',
+                                      style: TextStyle(
+                                        color: Color(0xFF541B3D),
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
                                   ],
                                 ),
-                                const SizedBox(height: 16),
-                                stockField,
-                              ],
-                            );
-                          },
+                              ),
+                          ],
                         ),
                       ),
-
-                      const SizedBox(height: 24),
-
-                      // ==================================================
-                      // SAVE BUTTON
-                      // ==================================================
-                      SizedBox(
-                        height: 56,
-                        child: FilledButton.icon(
-                          onPressed: isSaving ? null : saveProduct,
-                          icon: isSaving
-                              ? const SizedBox(
-                                  width: 22,
-                                  height: 22,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.5,
-                                  ),
-                                )
-                              : const Icon(Icons.check_rounded),
-                          label: Text(
-                            isSaving ? 'Uploading & saving...' : 'Save Product',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                      const SizedBox(height: 22),
+                      if (isWide)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              flex: 7,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  basicInformation,
+                                  const SizedBox(height: 18),
+                                  productImage,
+                                  const SizedBox(height: 18),
+                                  priceAndInventory,
+                                  const SizedBox(height: 22),
+                                  publishButton,
+                                ],
+                              ),
                             ),
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      Text(
-                        'The image will be securely stored in Supabase Storage.',
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
+                            const SizedBox(width: 20),
+                            Expanded(
+                              flex: 4,
+                              child: Column(
+                                children: [
+                                  listingPreview,
+                                  const SizedBox(height: 16),
+                                  const ProductListingTipsCard(),
+                                ],
+                              ),
+                            ),
+                          ],
+                        )
+                      else ...[
+                        basicInformation,
+                        const SizedBox(height: 16),
+                        productImage,
+                        const SizedBox(height: 16),
+                        priceAndInventory,
+                        const SizedBox(height: 16),
+                        listingPreview,
+                        const SizedBox(height: 16),
+                        const ProductListingTipsCard(),
+                        const SizedBox(height: 22),
+                        publishButton,
+                      ],
                     ],
                   ),
                 ),
@@ -610,24 +748,44 @@ class _ImagePreview extends StatelessWidget {
         height: 210,
         width: double.infinity,
         decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHighest,
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFFFFCF8), Color(0xFFF5EBE7)],
+          ),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: colorScheme.outlineVariant),
+          border: Border.all(color: const Color(0xFFEADDD5)),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.add_photo_alternate_outlined,
-              size: 48,
-              color: colorScheme.onSurfaceVariant,
+            Container(
+              width: 58,
+              height: 58,
+              decoration: BoxDecoration(
+                color: const Color(0xFFF1E1E6),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: const Icon(
+                Icons.add_photo_alternate_outlined,
+                size: 29,
+                color: Color(0xFF541B3D),
+              ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 13),
             Text(
-              'No image selected',
+              'Your product photo will appear here',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: const Color(0xFF281622),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Use a square or landscape image for best results.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w500,
               ),
             ),
           ],
@@ -677,67 +835,6 @@ class _ImagePreview extends StatelessWidget {
     );
   }
 }
-
-// ==========================================================
-// SECTION CARD
-// ==========================================================
-
-class _SectionCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final Widget child;
-
-  const _SectionCard({
-    required this.title,
-    required this.subtitle,
-    required this.child,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: colorScheme.outlineVariant),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 14,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            title,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 18),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-// ==========================================================
-// FIELD LABEL
-// ==========================================================
 
 class _FieldLabel extends StatelessWidget {
   final String text;

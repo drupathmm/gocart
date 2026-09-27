@@ -9,8 +9,13 @@ import 'user_home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   final bool switchAccount;
+  final String? initialMessage;
 
-  const LoginScreen({super.key, this.switchAccount = false});
+  const LoginScreen({
+    super.key,
+    this.switchAccount = false,
+    this.initialMessage,
+  });
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -24,6 +29,19 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool isLoading = false;
   bool isPasswordVisible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final message = widget.initialMessage;
+    if (message != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _showMessage(message, isError: false);
+        }
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -78,19 +96,38 @@ class _LoginScreenState extends State<LoginScreen> {
       // Load role and merchant status
       // ----------------------------------------------------------
 
-      final profile = await supabase
+      var profile = await supabase
           .from('profiles')
           .select('role, merchant_status')
           .eq('id', user.id)
           .maybeSingle();
 
       if (profile == null) {
-        await supabase.auth.signOut();
+        // Email confirmation can leave a valid Auth account without a usable
+        // session during signup. Complete its profile on the first confirmed
+        // login, using only the two roles offered by the signup flow.
+        final metadata = user.userMetadata ?? const <String, dynamic>{};
+        final name = (metadata['name'] as String? ?? '').trim();
+        final requestedRole = metadata['role'] as String?;
 
-        throw Exception(
-          'Your account profile could not be found. '
-          'Please contact support.',
-        );
+        if (name.isEmpty ||
+            (requestedRole != 'user' && requestedRole != 'merchant')) {
+          await supabase.auth.signOut();
+          throw Exception(
+            'Your account profile could not be created. Please contact support.',
+          );
+        }
+
+        profile = await supabase
+            .from('profiles')
+            .insert({
+              'id': user.id,
+              'name': name,
+              'email': user.email ?? '',
+              'role': requestedRole,
+            })
+            .select('role, merchant_status')
+            .single();
       }
 
       final role = profile['role'] as String?;
@@ -228,7 +265,7 @@ class _LoginScreenState extends State<LoginScreen> {
           behavior: SnackBarBehavior.floating,
           backgroundColor: isError
               ? Colors.red.shade700
-              : const Color(0xFF6F4B9B),
+              : const Color(0xFF541B3D),
           content: Text(message),
         ),
       );
@@ -256,7 +293,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF9FF),
+      backgroundColor: const Color(0xFFFBF6F0),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -309,11 +346,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: const Color(0xFFE4D9E9)),
+                          border: Border.all(color: const Color(0xFFEADDD5)),
                           boxShadow: [
                             BoxShadow(
                               color: const Color(
-                                0xFF6F4B9B,
+                                0xFF541B3D,
                               ).withValues(alpha: 0.09),
                               blurRadius: 30,
                               offset: const Offset(0, 12),
@@ -427,7 +464,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 child: FilledButton(
                                   onPressed: isLoading ? null : login,
                                   style: FilledButton.styleFrom(
-                                    backgroundColor: const Color(0xFF6F4B9B),
+                                    backgroundColor: const Color(0xFF541B3D),
                                     foregroundColor: Colors.white,
                                     disabledBackgroundColor: const Color(
                                       0xFFD9D0DF,
@@ -497,7 +534,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       'Create account →',
                                       style: TextStyle(
                                         fontWeight: FontWeight.w700,
-                                        color: Color(0xFF6F4B9B),
+                                        color: Color(0xFF541B3D),
                                       ),
                                     ),
                                   ),
@@ -516,7 +553,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           Container(
                             width: 34,
                             height: 1,
-                            color: const Color(0xFFD8C9E2),
+                            color: const Color(0xFFE7B98A),
                           ),
                           const SizedBox(width: 12),
                           const Text(
@@ -525,14 +562,14 @@ class _LoginScreenState extends State<LoginScreen> {
                               fontSize: 9,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 1.7,
-                              color: Color(0xFF6F4B9B),
+                              color: Color(0xFF541B3D),
                             ),
                           ),
                           const SizedBox(width: 12),
                           Container(
                             width: 34,
                             height: 1,
-                            color: const Color(0xFFD8C9E2),
+                            color: const Color(0xFFE7B98A),
                           ),
                         ],
                       ),
@@ -568,21 +605,21 @@ class _LoginScreenState extends State<LoginScreen> {
   }) {
     return InputDecoration(
       hintText: hint,
-      prefixIcon: Icon(icon, color: const Color(0xFF6F4B9B)),
+      prefixIcon: Icon(icon, color: const Color(0xFF541B3D)),
       suffixIcon: suffix,
       filled: true,
-      fillColor: const Color(0xFFFAF7FC),
+      fillColor: const Color(0xFFFCF8F3),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: BorderSide.none,
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color(0xFFE4D9E9)),
+        borderSide: const BorderSide(color: Color(0xFFEADDD5)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color(0xFF6F4B9B), width: 1.5),
+        borderSide: const BorderSide(color: Color(0xFF541B3D), width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),

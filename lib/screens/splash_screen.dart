@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../widgets/gocart_logo.dart';
+import 'admin_dashboard_screen.dart';
 import 'login_screen.dart';
 import 'merchant_dashboard_screen.dart';
 import 'user_home_screen.dart';
@@ -18,6 +19,8 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen> {
   bool _isLoading = true;
   String? _errorMessage;
+  Timer? _splashDelayTimer;
+  Completer<void>? _splashDelayCompleter;
 
   @override
   void initState() {
@@ -25,10 +28,26 @@ class _SplashScreenState extends State<SplashScreen> {
     _initializeApp();
   }
 
+  @override
+  void dispose() {
+    _splashDelayTimer?.cancel();
+    final delayCompleter = _splashDelayCompleter;
+    if (delayCompleter != null && !delayCompleter.isCompleted) {
+      delayCompleter.complete();
+    }
+    super.dispose();
+  }
+
   Future<void> _initializeApp() async {
-    // Keep the splash screen visible briefly so the branding
-    // does not disappear instantly on fast devices.
-    await Future<void>.delayed(const Duration(milliseconds: 1200));
+    // Keep the splash screen visible briefly for branding.
+    final delayCompleter = Completer<void>();
+    _splashDelayCompleter = delayCompleter;
+    _splashDelayTimer = Timer(
+      const Duration(milliseconds: 1200),
+      delayCompleter.complete,
+    );
+    await delayCompleter.future;
+    _splashDelayTimer = null;
 
     if (!mounted) {
       return;
@@ -36,10 +55,15 @@ class _SplashScreenState extends State<SplashScreen> {
 
     try {
       final supabase = Supabase.instance.client;
+
+      // Supabase restores the existing session automatically
+      // when the application starts again, including browser refresh.
       final session = supabase.auth.currentSession;
 
-      // No active session:
-      // allow the user to browse the store as a guest.
+      // ------------------------------------------------------------
+      // NO SESSION
+      // ------------------------------------------------------------
+      // User is a guest, so allow normal browsing.
       if (session == null) {
         _openUserHome();
         return;
@@ -47,11 +71,12 @@ class _SplashScreenState extends State<SplashScreen> {
 
       final user = session.user;
 
-      // The session exists, so load the user's profile
-      // to determine whether they are a buyer or merchant.
+      // ------------------------------------------------------------
+      // LOAD PROFILE / ROLE
+      // ------------------------------------------------------------
       final profile = await supabase
           .from('profiles')
-          .select('role')
+          .select('role, merchant_status')
           .eq('id', user.id)
           .maybeSingle();
 
@@ -59,9 +84,9 @@ class _SplashScreenState extends State<SplashScreen> {
         return;
       }
 
-      // A valid Auth session without a profile is an
-      // incomplete account state. Do not leave the user
-      // trapped on a broken authenticated screen.
+      // ------------------------------------------------------------
+      // SESSION EXISTS BUT PROFILE DOES NOT
+      // ------------------------------------------------------------
       if (profile == null) {
         await supabase.auth.signOut();
 
@@ -74,19 +99,50 @@ class _SplashScreenState extends State<SplashScreen> {
       }
 
       final role = profile['role'] as String?;
+      final merchantStatus =
+          profile['merchant_status'] as String? ?? 'approved';
 
+      // ------------------------------------------------------------
+      // ADMIN
+      // ------------------------------------------------------------
+      if (role == 'admin') {
+        _openAdminDashboard();
+        return;
+      }
+
+      // ------------------------------------------------------------
+      // MERCHANT
+      // ------------------------------------------------------------
       if (role == 'merchant') {
+        // A suspended merchant should not enter the dashboard.
+        if (merchantStatus == 'suspended') {
+          await supabase.auth.signOut();
+
+          if (!mounted) {
+            return;
+          }
+
+          _showSuspendedMessage();
+          return;
+        }
+
         _openMerchantDashboard();
         return;
       }
 
+      // ------------------------------------------------------------
+      // NORMAL USER / BUYER
+      // ------------------------------------------------------------
       if (role == 'user') {
         _openUserHome();
         return;
       }
 
-      // Unknown role: safely sign out rather than trusting
-      // an unexpected role value.
+      // ------------------------------------------------------------
+      // UNKNOWN ROLE
+      // ------------------------------------------------------------
+      // Only unexpected/invalid roles are signed out.
+      // Admin is explicitly handled above.
       await supabase.auth.signOut();
 
       if (!mounted) {
@@ -108,6 +164,10 @@ class _SplashScreenState extends State<SplashScreen> {
       debugPrint('Splash initialization error: $error');
     }
   }
+
+  // ==========================================================================
+  // NAVIGATION
+  // ==========================================================================
 
   void _openUserHome() {
     if (!mounted) {
@@ -131,6 +191,17 @@ class _SplashScreenState extends State<SplashScreen> {
     );
   }
 
+  void _openAdminDashboard() {
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const AdminDashboardScreen()),
+    );
+  }
+
   void _openLogin() {
     if (!mounted) {
       return;
@@ -142,6 +213,26 @@ class _SplashScreenState extends State<SplashScreen> {
     );
   }
 
+  // ==========================================================================
+  // SUSPENDED MERCHANT
+  // ==========================================================================
+
+  void _showSuspendedMessage() {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _isLoading = false;
+      _errorMessage =
+          'This merchant account has been suspended by the administrator.';
+    });
+  }
+
+  // ==========================================================================
+  // RETRY
+  // ==========================================================================
+
   Future<void> _retry() async {
     setState(() {
       _isLoading = true;
@@ -151,12 +242,20 @@ class _SplashScreenState extends State<SplashScreen> {
     await _initializeApp();
   }
 
+  // ==========================================================================
+  // BUILD
+  // ==========================================================================
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final logoWidth = (MediaQuery.sizeOf(context).width - 48).clamp(
+      180.0,
+      280.0,
+    );
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFCF7FF),
+      backgroundColor: const Color(0xFFFBF6F0),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -166,7 +265,7 @@ class _SplashScreenState extends State<SplashScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const GoCartLogo(width: 280),
+                  GoCartLogo(width: logoWidth),
 
                   const SizedBox(height: 32),
 
@@ -176,7 +275,7 @@ class _SplashScreenState extends State<SplashScreen> {
                       height: 26,
                       child: CircularProgressIndicator(
                         strokeWidth: 2.5,
-                        color: Color(0xFF6F52A1),
+                        color: Color(0xFF541B3D),
                       ),
                     ),
 
@@ -214,7 +313,7 @@ class _SplashScreenState extends State<SplashScreen> {
                       child: FilledButton(
                         onPressed: _isLoading ? null : _retry,
                         style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF6F52A1),
+                          backgroundColor: const Color(0xFF541B3D),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(

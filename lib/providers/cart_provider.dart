@@ -1,7 +1,9 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/cart_item.dart';
 import '../services/cart_service.dart';
+import 'auth_provider.dart';
 
 final cartServiceProvider = Provider<CartService>((ref) {
   return CartService();
@@ -17,6 +19,15 @@ class CartNotifier extends AsyncNotifier<List<CartItem>> {
 
   @override
   Future<List<CartItem>> build() async {
+    final authState = ref.watch(authUserIdProvider);
+    final userId =
+        authState.asData?.value ??
+        Supabase.instance.client.auth.currentUser?.id;
+
+    if (userId == null) {
+      return const [];
+    }
+
     return ref.read(cartServiceProvider).getMyCart();
   }
 

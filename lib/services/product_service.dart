@@ -6,7 +6,10 @@ import '../models/product.dart';
 import '../models/product_category.dart';
 
 class ProductService {
-  final SupabaseClient _supabase = Supabase.instance.client;
+  final SupabaseClient _supabase;
+
+  ProductService({SupabaseClient? supabaseClient})
+    : _supabase = supabaseClient ?? Supabase.instance.client;
 
   static const String _bucketName = 'product-images';
   static const int _maxImageSizeBytes = 5 * 1024 * 1024;
@@ -41,17 +44,13 @@ class ProductService {
   // Get products belonging to logged-in merchant
   // --------------------------------------------------
 
-  Future<List<Product>> getMyProducts() async {
-    final user = _supabase.auth.currentUser;
-
-    if (user == null) {
-      throw Exception('You must be logged in.');
-    }
+  Future<List<Product>> getMyProducts(String expectedMerchantId) async {
+    await _ensureMerchant(expectedMerchantId, requireApproval: false);
 
     final response = await _supabase
         .from('products')
         .select()
-        .eq('merchant_id', user.id)
+        .eq('merchant_id', expectedMerchantId)
         .order('created_at', ascending: false);
 
     return _mapProducts(response);
@@ -75,21 +74,32 @@ class ProductService {
   // Check that the current account is a merchant
   // --------------------------------------------------
 
-  Future<void> _ensureMerchant() async {
+  Future<void> _ensureMerchant(
+    String expectedMerchantId, {
+    bool requireApproval = true,
+  }) async {
     final user = _supabase.auth.currentUser;
 
-    if (user == null) {
-      throw Exception('You must be logged in.');
+    if (user == null || user.id != expectedMerchantId) {
+      throw Exception('Your session changed. Please sign in again.');
     }
 
     final profile = await _supabase
         .from('profiles')
-        .select('role')
+        .select('role, merchant_status')
         .eq('id', user.id)
         .maybeSingle();
 
     if (profile == null || profile['role'] != 'merchant') {
       throw Exception('Only merchants can manage products.');
+    }
+
+    final status = profile['merchant_status'] as String?;
+    if (status == 'suspended') {
+      throw Exception('This merchant account has been suspended.');
+    }
+    if (requireApproval && status != 'approved') {
+      throw Exception('Your merchant account is awaiting approval.');
     }
   }
 
@@ -112,11 +122,11 @@ class ProductService {
       throw Exception('Product name must be 150 characters or less.');
     }
 
-    if (originalPrice <= 0) {
+    if (!originalPrice.isFinite || originalPrice <= 0) {
       throw Exception('Original price must be greater than 0.');
     }
 
-    if (offerPrice <= 0) {
+    if (!offerPrice.isFinite || offerPrice <= 0) {
       throw Exception('Offer price must be greater than 0.');
     }
 
@@ -288,11 +298,17 @@ class ProductService {
     }
   }
 
+  /// Removes an image after an administrator deletes its product record.
+  /// Cleanup failures are logged and do not undo a successful database delete.
+  Future<void> deleteProductImage(String? imageUrl) =>
+      _deleteProductImage(imageUrl);
+
   // --------------------------------------------------
   // Create product
   // --------------------------------------------------
 
   Future<Product> createProduct({
+    required String expectedMerchantId,
     required String name,
     required String description,
     required double originalPrice,
@@ -301,7 +317,7 @@ class ProductService {
     required String category,
     XFile? imageFile,
   }) async {
-    await _ensureMerchant();
+    await _ensureMerchant(expectedMerchantId);
 
     _validateProductData(
       name: name,
@@ -357,6 +373,7 @@ class ProductService {
   // --------------------------------------------------
 
   Future<Product> updateProduct({
+    required String expectedMerchantId,
     required int productId,
     required String name,
     required String description,
@@ -367,7 +384,7 @@ class ProductService {
     XFile? imageFile,
     bool removeImage = false,
   }) async {
-    await _ensureMerchant();
+    await _ensureMerchant(expectedMerchantId);
 
     _validateProductData(
       name: name,
@@ -378,6 +395,9 @@ class ProductService {
     );
 
     final existingProduct = await getProductById(productId);
+    if (existingProduct.merchantId != expectedMerchantId) {
+      throw Exception('You can only edit your own products.');
+    }
 
     String? newImageUrl;
 
@@ -438,10 +458,16 @@ class ProductService {
   // Delete product
   // --------------------------------------------------
 
-  Future<void> deleteProduct(int productId) async {
-    await _ensureMerchant();
+  Future<void> deleteProduct(
+    int productId, {
+    required String expectedMerchantId,
+  }) async {
+    await _ensureMerchant(expectedMerchantId);
 
     final existingProduct = await getProductById(productId);
+    if (existingProduct.merchantId != expectedMerchantId) {
+      throw Exception('You can only delete your own products.');
+    }
 
     await _supabase.from('products').delete().eq('id', productId);
 

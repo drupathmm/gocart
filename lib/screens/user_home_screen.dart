@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/product.dart';
 import '../models/product_category.dart';
 import '../providers/product_provider.dart';
+import '../theme/app_theme.dart';
 import '../widgets/gocart_footer.dart';
 import 'cart_screen.dart';
 import 'product_detail_screen.dart';
@@ -38,6 +39,7 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
 
   void searchProducts(String value) {
     searchTimer?.cancel();
+    ref.read(productsProvider.notifier).cancelPendingRequests();
 
     searchTimer = Timer(const Duration(milliseconds: 450), () {
       final query = value.trim();
@@ -75,8 +77,6 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     final pages = [
       const _UserProductsPage(),
       const CartScreen(),
@@ -84,129 +84,134 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
     ];
 
     return Scaffold(
-      backgroundColor: colorScheme.surface,
+      backgroundColor: GoCartTheme.canvas,
 
       // ==========================================================
       // TOP NAVIGATION
       // ==========================================================
       appBar: AppBar(
-        backgroundColor: colorScheme.surface,
+        backgroundColor: GoCartTheme.canvas,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         toolbarHeight: 76,
         automaticallyImplyLeading: false,
         titleSpacing: 20,
-        title: LayoutBuilder(
-          builder: (context, constraints) {
-            return Row(
-              children: [
-                // ==================================================
-                // LOGO
-                // ==================================================
-                const _GoCartLogo(),
+        title: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1320),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return Row(
+                  children: [
+                    // ==================================================
+                    // LOGO
+                    // ==================================================
+                    const _GoCartLogo(),
 
-                const SizedBox(width: 28),
+                    const SizedBox(width: 28),
 
-                // ==================================================
-                // SEARCH
-                // ==================================================
-                if (constraints.maxWidth >= 600)
-                  Expanded(
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 520),
-                        child: _SearchBar(
-                          controller: searchController,
-                          onChanged: searchProducts,
-                          onClear: clearSearch,
+                    // ==================================================
+                    // SEARCH
+                    // ==================================================
+                    if (constraints.maxWidth >= 600)
+                      Expanded(
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 520),
+                            child: _SearchBar(
+                              controller: searchController,
+                              onChanged: searchProducts,
+                              onClear: clearSearch,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  )
-                else
-                  const Spacer(),
+                      )
+                    else
+                      const Spacer(),
 
-                const SizedBox(width: 24),
+                    const SizedBox(width: 24),
 
-                // ==================================================
-                // NAVIGATION
-                // ==================================================
-                if (constraints.maxWidth >= 850)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _TopNavItem(
-                        icon: Icons.home_outlined,
-                        selectedIcon: Icons.home_rounded,
-                        label: 'Home',
-                        selected: currentIndex == 0,
-                        onTap: () {
-                          changePage(0);
-                        },
+                    // ==================================================
+                    // NAVIGATION
+                    // ==================================================
+                    if (constraints.maxWidth >= 850)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _TopNavItem(
+                            icon: Icons.home_outlined,
+                            selectedIcon: Icons.home_rounded,
+                            label: 'Home',
+                            selected: currentIndex == 0,
+                            onTap: () {
+                              changePage(0);
+                            },
+                          ),
+                          const SizedBox(width: 6),
+                          _TopNavItem(
+                            icon: Icons.shopping_cart_outlined,
+                            selectedIcon: Icons.shopping_cart_rounded,
+                            label: 'Cart',
+                            selected: currentIndex == 1,
+                            onTap: () {
+                              changePage(1);
+                            },
+                          ),
+                          const SizedBox(width: 6),
+                          _TopNavItem(
+                            icon: Icons.person_outline_rounded,
+                            selectedIcon: Icons.person_rounded,
+                            label: 'Profile',
+                            selected: currentIndex == 2,
+                            onTap: () {
+                              changePage(2);
+                            },
+                          ),
+                        ],
+                      )
+                    else
+                      PopupMenuButton<int>(
+                        tooltip: 'Navigation',
+                        icon: const Icon(Icons.menu_rounded),
+                        onSelected: changePage,
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 0,
+                            child: Row(
+                              children: [
+                                Icon(Icons.home_outlined),
+                                SizedBox(width: 12),
+                                Text('Home'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 1,
+                            child: Row(
+                              children: [
+                                Icon(Icons.shopping_cart_outlined),
+                                SizedBox(width: 12),
+                                Text('Cart'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 2,
+                            child: Row(
+                              children: [
+                                Icon(Icons.person_outline_rounded),
+                                SizedBox(width: 12),
+                                Text('Profile'),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 6),
-                      _TopNavItem(
-                        icon: Icons.shopping_cart_outlined,
-                        selectedIcon: Icons.shopping_cart_rounded,
-                        label: 'Cart',
-                        selected: currentIndex == 1,
-                        onTap: () {
-                          changePage(1);
-                        },
-                      ),
-                      const SizedBox(width: 6),
-                      _TopNavItem(
-                        icon: Icons.person_outline_rounded,
-                        selectedIcon: Icons.person_rounded,
-                        label: 'Profile',
-                        selected: currentIndex == 2,
-                        onTap: () {
-                          changePage(2);
-                        },
-                      ),
-                    ],
-                  )
-                else
-                  PopupMenuButton<int>(
-                    tooltip: 'Navigation',
-                    icon: const Icon(Icons.menu_rounded),
-                    onSelected: changePage,
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 0,
-                        child: Row(
-                          children: [
-                            Icon(Icons.home_outlined),
-                            SizedBox(width: 12),
-                            Text('Home'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 1,
-                        child: Row(
-                          children: [
-                            Icon(Icons.shopping_cart_outlined),
-                            SizedBox(width: 12),
-                            Text('Cart'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 2,
-                        child: Row(
-                          children: [
-                            Icon(Icons.person_outline_rounded),
-                            SizedBox(width: 12),
-                            Text('Profile'),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-              ],
-            );
-          },
+                  ],
+                );
+              },
+            ),
+          ),
         ),
       ),
 
@@ -1126,10 +1131,12 @@ class _ProductGrid extends StatelessWidget {
 
         int columns;
 
-        if (width >= 1050) {
+        if (width >= 1000) {
           columns = 4;
-        } else if (width >= 720) {
+        } else if (width >= 700) {
           columns = 3;
+        } else if (width < 360) {
+          columns = 1;
         } else {
           columns = 2;
         }
@@ -1182,7 +1189,7 @@ class _ProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    final isOutOfStock = product.stock == 0;
+    final isOutOfStock = product.stock <= 0;
 
     return Material(
       color: colorScheme.surface,

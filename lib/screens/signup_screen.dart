@@ -47,6 +47,8 @@ class _SignupScreenState extends State<SignupScreen> {
       return;
     }
 
+    var authAccountCreated = false;
+
     setState(() {
       isLoading = true;
     });
@@ -59,12 +61,34 @@ class _SignupScreenState extends State<SignupScreen> {
       final response = await Supabase.instance.client.auth.signUp(
         email: email,
         password: password,
+        data: {'name': name, 'role': selectedRole},
       );
 
       final user = response.user;
 
       if (user == null) {
         throw Exception('Account creation failed.');
+      }
+      authAccountCreated = true;
+
+      // With email confirmation enabled there is no authenticated session,
+      // so RLS correctly prevents the client from inserting the profile now.
+      // LoginScreen completes it after the user verifies their email.
+      if (response.session == null) {
+        if (!mounted) {
+          return;
+        }
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const LoginScreen(
+              initialMessage:
+                  'Account created. Verify your email, then sign in to finish setup.',
+            ),
+          ),
+          (route) => false,
+        );
+        return;
       }
 
       await Supabase.instance.client.from('profiles').insert({
@@ -100,6 +124,20 @@ class _SignupScreenState extends State<SignupScreen> {
       }
     } on PostgrestException catch (error) {
       if (mounted) {
+        if (authAccountCreated) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const LoginScreen(
+                initialMessage:
+                    'Your account was created. Sign in to finish setting up your profile.',
+              ),
+            ),
+            (route) => false,
+          );
+          return;
+        }
+
         _showMessage(
           error.message.isNotEmpty
               ? error.message
@@ -208,7 +246,7 @@ class _SignupScreenState extends State<SignupScreen> {
         behavior: SnackBarBehavior.floating,
         backgroundColor: isError
             ? Colors.red.shade700
-            : const Color(0xFF6F4B9B),
+            : const Color(0xFF541B3D),
         content: Text(message),
       ),
     );
@@ -225,7 +263,7 @@ class _SignupScreenState extends State<SignupScreen> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF9FF),
+      backgroundColor: const Color(0xFFFBF6F0),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -297,7 +335,7 @@ class _SignupScreenState extends State<SignupScreen> {
                                     'Sign in →',
                                     style: TextStyle(
                                       fontWeight: FontWeight.w700,
-                                      color: Color(0xFF6F4B9B),
+                                      color: Color(0xFF541B3D),
                                     ),
                                   ),
                                 ),
@@ -351,11 +389,11 @@ class _SignupScreenState extends State<SignupScreen> {
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: const Color(0xFFE4D9E9)),
+                          border: Border.all(color: const Color(0xFFEADDD5)),
                           boxShadow: [
                             BoxShadow(
                               color: const Color(
-                                0xFF6F4B9B,
+                                0xFF541B3D,
                               ).withValues(alpha: 0.09),
                               blurRadius: 30,
                               offset: const Offset(0, 12),
@@ -601,7 +639,7 @@ class _SignupScreenState extends State<SignupScreen> {
                                 child: FilledButton(
                                   onPressed: isLoading ? null : createAccount,
                                   style: FilledButton.styleFrom(
-                                    backgroundColor: const Color(0xFF6F4B9B),
+                                    backgroundColor: const Color(0xFF541B3D),
                                     foregroundColor: Colors.white,
                                     disabledBackgroundColor: const Color(
                                       0xFFD9D0DF,
@@ -659,9 +697,9 @@ class _SignupScreenState extends State<SignupScreen> {
                             vertical: 13,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFF4EBFA),
+                            color: const Color(0xFFFBF4EF),
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: const Color(0xFFE4D9E9)),
+                            border: Border.all(color: const Color(0xFFEADDD5)),
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -689,7 +727,7 @@ class _SignupScreenState extends State<SignupScreen> {
                                   'Sign in',
                                   style: TextStyle(
                                     fontWeight: FontWeight.w700,
-                                    color: Color(0xFF6F4B9B),
+                                    color: Color(0xFF541B3D),
                                   ),
                                 ),
                               ),
@@ -708,7 +746,7 @@ class _SignupScreenState extends State<SignupScreen> {
                           Container(
                             width: 34,
                             height: 1,
-                            color: const Color(0xFFD8C9E2),
+                            color: const Color(0xFFE7B98A),
                           ),
                           const SizedBox(width: 12),
                           const Text(
@@ -717,14 +755,14 @@ class _SignupScreenState extends State<SignupScreen> {
                               fontSize: 9,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 1.7,
-                              color: Color(0xFF6F4B9B),
+                              color: Color(0xFF541B3D),
                             ),
                           ),
                           const SizedBox(width: 12),
                           Container(
                             width: 34,
                             height: 1,
-                            color: const Color(0xFFD8C9E2),
+                            color: const Color(0xFFE7B98A),
                           ),
                         ],
                       ),
@@ -757,7 +795,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
   Widget _buildMerchantPendingScreen() {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF9FF),
+      backgroundColor: const Color(0xFFFBF6F0),
       body: SafeArea(
         child: Center(
           child: Padding(
@@ -770,10 +808,10 @@ class _SignupScreenState extends State<SignupScreen> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(26),
-                  border: Border.all(color: const Color(0xFFE4D9E9)),
+                  border: Border.all(color: const Color(0xFFEADDD5)),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF6F4B9B).withValues(alpha: 0.10),
+                      color: const Color(0xFF541B3D).withValues(alpha: 0.10),
                       blurRadius: 30,
                       offset: const Offset(0, 12),
                     ),
@@ -790,13 +828,13 @@ class _SignupScreenState extends State<SignupScreen> {
                       width: 76,
                       height: 76,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF1E5FF),
+                        color: const Color(0xFFF4E8E7),
                         borderRadius: BorderRadius.circular(24),
                       ),
                       child: const Icon(
                         Icons.storefront_outlined,
                         size: 38,
-                        color: Color(0xFF6F4B9B),
+                        color: Color(0xFF541B3D),
                       ),
                     ),
 
@@ -832,7 +870,7 @@ class _SignupScreenState extends State<SignupScreen> {
                       height: 30,
                       child: CircularProgressIndicator(
                         strokeWidth: 3,
-                        color: Color(0xFF6F4B9B),
+                        color: Color(0xFF541B3D),
                       ),
                     ),
 
@@ -856,7 +894,7 @@ class _SignupScreenState extends State<SignupScreen> {
                         vertical: 12,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF8F3FB),
+                        color: const Color(0xFFFBF4EF),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
@@ -865,7 +903,7 @@ class _SignupScreenState extends State<SignupScreen> {
                           const Icon(
                             Icons.lock_outline_rounded,
                             size: 18,
-                            color: Color(0xFF6F4B9B),
+                            color: Color(0xFF541B3D),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
@@ -902,21 +940,21 @@ class _SignupScreenState extends State<SignupScreen> {
   }) {
     return InputDecoration(
       hintText: hint,
-      prefixIcon: Icon(icon, color: const Color(0xFF6F4B9B)),
+      prefixIcon: Icon(icon, color: const Color(0xFF541B3D)),
       suffixIcon: suffix,
       filled: true,
-      fillColor: const Color(0xFFFAF7FC),
+      fillColor: const Color(0xFFFCF8F3),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
         borderSide: BorderSide.none,
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color(0xFFE4D9E9)),
+        borderSide: const BorderSide(color: Color(0xFFEADDD5)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color(0xFF6F4B9B), width: 1.5),
+        borderSide: const BorderSide(color: Color(0xFF541B3D), width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
@@ -981,10 +1019,10 @@ class _RoleOption extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: selected ? const Color(0xFFF1E5FF) : const Color(0xFFFCFAFD),
+          color: selected ? const Color(0xFFF4E8E7) : const Color(0xFFFFFCF9),
           borderRadius: BorderRadius.circular(17),
           border: Border.all(
-            color: selected ? const Color(0xFF6F4B9B) : const Color(0xFFE4D9E9),
+            color: selected ? const Color(0xFF541B3D) : const Color(0xFFEADDD5),
             width: selected ? 1.7 : 1,
           ),
         ),
@@ -998,11 +1036,11 @@ class _RoleOption extends StatelessWidget {
               height: 48,
               decoration: BoxDecoration(
                 color: selected
-                    ? const Color(0xFFE5D2FF)
-                    : const Color(0xFFF1E8F6),
+                    ? const Color(0xFFEAD7C9)
+                    : const Color(0xFFF4E8E7),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(icon, color: const Color(0xFF6F4B9B), size: 23),
+              child: Icon(icon, color: const Color(0xFF541B3D), size: 23),
             ),
 
             const SizedBox(width: 13),
@@ -1047,7 +1085,7 @@ class _RoleOption extends StatelessWidget {
                 shape: BoxShape.circle,
                 border: Border.all(
                   color: selected
-                      ? const Color(0xFF6F4B9B)
+                      ? const Color(0xFF541B3D)
                       : Colors.grey.shade400,
                   width: 2,
                 ),
@@ -1059,7 +1097,7 @@ class _RoleOption extends StatelessWidget {
                         height: 9,
                         decoration: const BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Color(0xFF6F4B9B),
+                          color: Color(0xFF541B3D),
                         ),
                       ),
                     )

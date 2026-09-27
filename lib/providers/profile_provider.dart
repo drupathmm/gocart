@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/profile.dart';
 import '../services/profile_service.dart';
+import 'auth_provider.dart';
 
 // --------------------------------------------------
 // Profile service
@@ -22,6 +23,9 @@ final profileProvider = AsyncNotifierProvider<ProfileNotifier, Profile>(
 class ProfileNotifier extends AsyncNotifier<Profile> {
   @override
   Future<Profile> build() async {
+    // Profile data belongs to one auth identity. Rebuild it when Supabase
+    // switches accounts so a previous user's name/role cannot remain cached.
+    ref.watch(authUserIdProvider);
     return ref.read(profileServiceProvider).getMyProfile();
   }
 

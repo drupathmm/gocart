@@ -129,7 +129,7 @@ class _MerchantProfileScreenState extends ConsumerState<MerchantProfileScreen> {
           behavior: SnackBarBehavior.floating,
           backgroundColor: isError
               ? Colors.red.shade700
-              : const Color(0xFF6F4B9B),
+              : const Color(0xFF541B3D),
         ),
       );
   }
@@ -143,9 +143,9 @@ class _MerchantProfileScreenState extends ConsumerState<MerchantProfileScreen> {
     final profileAsync = ref.watch(profileProvider);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF9FF),
+      backgroundColor: const Color(0xFFFBF6F0),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFFFF9FF),
+        backgroundColor: const Color(0xFFFBF6F0),
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         leading: IconButton(
@@ -166,7 +166,7 @@ class _MerchantProfileScreenState extends ConsumerState<MerchantProfileScreen> {
         // ========================================================
         loading: () {
           return const Center(
-            child: CircularProgressIndicator(color: Color(0xFF6F4B9B)),
+            child: CircularProgressIndicator(color: Color(0xFF541B3D)),
           );
         },
 
@@ -205,7 +205,7 @@ class _MerchantProfileScreenState extends ConsumerState<MerchantProfileScreen> {
                     icon: const Icon(Icons.refresh_rounded),
                     label: const Text('Try Again'),
                     style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF6F4B9B),
+                      backgroundColor: const Color(0xFF541B3D),
                       foregroundColor: Colors.white,
                     ),
                   ),
@@ -284,7 +284,7 @@ class _MerchantProfileScreenState extends ConsumerState<MerchantProfileScreen> {
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(14),
                               borderSide: const BorderSide(
-                                color: Color(0xFF6F4B9B),
+                                color: Color(0xFF541B3D),
                                 width: 2,
                               ),
                             ),
@@ -322,7 +322,7 @@ class _MerchantProfileScreenState extends ConsumerState<MerchantProfileScreen> {
                               _isSaving ? 'Saving...' : 'Save Changes',
                             ),
                             style: FilledButton.styleFrom(
-                              backgroundColor: const Color(0xFF6F4B9B),
+                              backgroundColor: const Color(0xFF541B3D),
                               foregroundColor: Colors.white,
                               disabledBackgroundColor: const Color(0xFFB9A9C9),
                               padding: const EdgeInsets.symmetric(vertical: 14),
@@ -431,13 +431,13 @@ class _MerchantProfileScreenState extends ConsumerState<MerchantProfileScreen> {
             width: 88,
             height: 88,
             decoration: const BoxDecoration(
-              color: Color(0xFFF0E8F8),
+              color: Color(0xFFF4E8E7),
               shape: BoxShape.circle,
             ),
             child: const Icon(
               Icons.storefront_rounded,
               size: 42,
-              color: Color(0xFF6F4B9B),
+              color: Color(0xFF541B3D),
             ),
           ),
 
@@ -464,13 +464,13 @@ class _MerchantProfileScreenState extends ConsumerState<MerchantProfileScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: const Color(0xFFF0E8F8),
+              color: const Color(0xFFF4E8E7),
               borderRadius: BorderRadius.circular(30),
             ),
             child: const Text(
               'MERCHANT',
               style: TextStyle(
-                color: Color(0xFF6F4B9B),
+                color: Color(0xFF541B3D),
                 fontSize: 12,
                 fontWeight: FontWeight.w800,
                 letterSpacing: 0.8,
@@ -577,7 +577,7 @@ class _MenuTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveIconColor = iconColor ?? const Color(0xFF6F4B9B);
+    final effectiveIconColor = iconColor ?? const Color(0xFF541B3D);
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),

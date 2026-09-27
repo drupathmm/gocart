@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/product.dart';
 import '../providers/cart_provider.dart';
+import 'cart_screen.dart';
 import '../widgets/login_required_dialog.dart';
 
 // ============================================================================
@@ -11,11 +12,11 @@ import '../widgets/login_required_dialog.dart';
 // ============================================================================
 
 class _GoCartColors {
-  static const Color purple = Color(0xFF6F4B9B);
-  static const Color darkPurple = Color(0xFF4D2D73);
-  static const Color lightPurple = Color(0xFFE9D8FF);
-  static const Color softPurple = Color(0xFFF4ECFA);
-  static const Color pearlWhite = Color(0xFFFFF9FF);
+  static const Color purple = Color(0xFF541B3D);
+  static const Color darkPurple = Color(0xFF391329);
+  static const Color lightPurple = Color(0xFFF1E1E6);
+  static const Color softPurple = Color(0xFFFBF4EF);
+  static const Color pearlWhite = Color(0xFFFBF6F0);
 }
 
 // ============================================================================
@@ -29,7 +30,7 @@ class ProductDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isOutOfStock = product.stock == 0;
+    final isOutOfStock = product.stock <= 0;
     final width = MediaQuery.of(context).size.width;
     final isDesktop = width >= 850;
 
@@ -793,7 +794,10 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
               label: 'VIEW CART',
               textColor: Colors.white,
               onPressed: () {
-                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const CartScreen()),
+                );
               },
             ),
           ),

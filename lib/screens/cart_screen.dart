@@ -4,14 +4,15 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/cart_item.dart';
 import '../providers/cart_provider.dart';
+import 'checkout_screen.dart';
 import 'login_screen.dart';
 import 'product_detail_screen.dart';
 
 class CartScreen extends ConsumerWidget {
   const CartScreen({super.key});
 
-  static const Color purple = Color(0xFF6F4B9B);
-  static const Color pearlWhite = Color(0xFFFFF9FF);
+  static const Color purple = Color(0xFF541B3D);
+  static const Color pearlWhite = Color(0xFFFBF6F0);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -98,8 +99,8 @@ class CartScreen extends ConsumerWidget {
 class _GuestCartView extends StatelessWidget {
   const _GuestCartView();
 
-  static const Color purple = Color(0xFF6F4B9B);
-  static const Color pearlWhite = Color(0xFFFFF9FF);
+  static const Color purple = Color(0xFF541B3D);
+  static const Color pearlWhite = Color(0xFFFBF6F0);
 
   @override
   Widget build(BuildContext context) {
@@ -120,7 +121,7 @@ class _GuestCartView extends StatelessWidget {
                     width: 100,
                     height: 100,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF0E8F8),
+                      color: const Color(0xFFF4E8E7),
                       borderRadius: BorderRadius.circular(30),
                     ),
                     child: const Icon(
@@ -214,114 +215,147 @@ class _CartContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    final isDesktop = width >= 900;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth >= 980;
+        final horizontalPadding = isDesktop ? 32.0 : 18.0;
+        final itemCards = items
+            .map((item) => _CartItemCard(item: item, ref: ref))
+            .toList();
+        final checkoutButton = SizedBox(
+          height: 54,
+          width: double.infinity,
+          child: FilledButton.icon(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const CheckoutScreen()),
+            ),
+            icon: const Icon(Icons.lock_outline_rounded, size: 18),
+            label: const Text('Proceed to Checkout'),
+          ),
+        );
 
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: EdgeInsets.fromLTRB(
-        isDesktop ? 32 : 18,
-        28,
-        isDesktop ? 32 : 18,
-        40,
-      ),
-      children: [
-        Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1100),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Your Cart',
-                  style: TextStyle(
-                    fontSize: 30,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.7,
-                  ),
-                ),
-
-                const SizedBox(height: 6),
-
-                Text(
-                  '${items.length} product${items.length == 1 ? '' : 's'} in your cart',
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-                ),
-
-                const SizedBox(height: 24),
-
-                if (savings > 0) ...[
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 13,
+        return ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.fromLTRB(
+            horizontalPadding,
+            isDesktop ? 36 : 24,
+            horizontalPadding,
+            40,
+          ),
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1180),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Your Cart',
+                      style: Theme.of(context).textTheme.headlineMedium,
                     ),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade50,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.green.shade100),
+                    const SizedBox(height: 6),
+                    Text(
+                      '${items.length} product${items.length == 1 ? '' : 's'} in your cart',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                     ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.local_offer_outlined,
-                          size: 20,
-                          color: Colors.green.shade700,
+                    const SizedBox(height: 24),
+                    if (savings > 0) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 13,
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'You are saving ₹${savings.toStringAsFixed(2)} on this order.',
-                            style: TextStyle(
-                              color: Colors.green.shade700,
-                              fontWeight: FontWeight.w600,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF8F2),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFD9EFDF)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.local_offer_outlined,
+                              size: 20,
+                              color: Color(0xFF258453),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'You are saving ₹${savings.toStringAsFixed(2)} on this order.',
+                                style: const TextStyle(
+                                  color: Color(0xFF258453),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                    ],
+                    if (isDesktop)
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: Column(children: itemCards)),
+                          const SizedBox(width: 24),
+                          SizedBox(
+                            width: 320,
+                            child: Column(
+                              children: [
+                                _OrderSummary(total: total, savings: savings),
+                                const SizedBox(height: 14),
+                                checkoutButton,
+                                const SizedBox(height: 12),
+                                const _CheckoutNote(),
+                              ],
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                ],
-
-                ...items.map((item) => _CartItemCard(item: item, ref: ref)),
-
-                const SizedBox(height: 10),
-
-                _OrderSummary(total: total, savings: savings),
-
-                const SizedBox(height: 16),
-
-                SizedBox(
-                  height: 54,
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Checkout will be available soon.'),
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
-                    },
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF6F4B9B),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(15),
-                      ),
-                    ),
-                    child: const Text(
-                      'Proceed to Checkout',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
+                        ],
+                      )
+                    else ...[
+                      ...itemCards,
+                      const SizedBox(height: 8),
+                      _OrderSummary(total: total, savings: savings),
+                      const SizedBox(height: 14),
+                      checkoutButton,
+                      const SizedBox(height: 12),
+                      const _CheckoutNote(),
+                    ],
+                  ],
                 ),
-              ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _CheckoutNote extends StatelessWidget {
+  const _CheckoutNote();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          Icons.info_outline_rounded,
+          size: 15,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+        const SizedBox(width: 7),
+        Flexible(
+          child: Text(
+            'Demo checkout only · no real payment will be taken',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
           ),
         ),
@@ -414,7 +448,7 @@ class _CartItemCard extends StatelessWidget {
                               Text(
                                 '₹${product.offerPrice.toStringAsFixed(2)}',
                                 style: const TextStyle(
-                                  color: Color(0xFF6F4B9B),
+                                  color: Color(0xFF541B3D),
                                   fontSize: 16,
                                   fontWeight: FontWeight.w800,
                                 ),
@@ -531,7 +565,7 @@ class _ProductImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final placeholderColor = const Color(0xFFF2EDF5);
+    final placeholderColor = const Color(0xFFF4EBE7);
 
     if (imageUrl == null || imageUrl!.trim().isEmpty) {
       return Container(
@@ -651,7 +685,7 @@ class _SummaryRow extends StatelessWidget {
             fontWeight: FontWeight.w800,
             color:
                 valueColor ??
-                (large ? const Color(0xFF6F4B9B) : Colors.black87),
+                (large ? const Color(0xFF541B3D) : Colors.black87),
           ),
         ),
       ],
@@ -679,13 +713,13 @@ class _EmptyCartView extends StatelessWidget {
             width: 100,
             height: 100,
             decoration: BoxDecoration(
-              color: const Color(0xFFF0E8F8),
+              color: const Color(0xFFF4E8E7),
               borderRadius: BorderRadius.circular(30),
             ),
             child: const Icon(
               Icons.shopping_cart_outlined,
               size: 48,
-              color: Color(0xFF6F4B9B),
+              color: Color(0xFF541B3D),
             ),
           ),
         ),
@@ -723,7 +757,7 @@ class _LoadingView extends StatelessWidget {
       physics: const AlwaysScrollableScrollPhysics(),
       children: const [
         SizedBox(height: 280),
-        Center(child: CircularProgressIndicator(color: Color(0xFF6F4B9B))),
+        Center(child: CircularProgressIndicator(color: Color(0xFF541B3D))),
       ],
     );
   }

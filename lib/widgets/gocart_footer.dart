@@ -7,15 +7,15 @@ class GoCartFooter extends StatelessWidget {
 
   const GoCartFooter({super.key, required this.onCategorySelected});
 
-  static const Color footerBackground = Color(0xFF070A1B);
-  static const Color footerSurface = Color(0xFF0D1228);
-  static const Color footerSurfaceLight = Color(0xFF121936);
-  static const Color footerHeading = Color(0xFFF8F4FF);
-  static const Color footerText = Color(0xFF9CA6C0);
-  static const Color footerMuted = Color(0xFF69738D);
-  static const Color footerAccent = Color(0xFF7C5BB3);
-  static const Color footerAccentSoft = Color(0xFFB89AE2);
-  static const Color footerBorder = Color(0xFF202742);
+  static const Color footerBackground = Color(0xFF28101F);
+  static const Color footerSurface = Color(0xFF361626);
+  static const Color footerSurfaceLight = Color(0xFF42192E);
+  static const Color footerHeading = Color(0xFFFFF8F2);
+  static const Color footerText = Color(0xFFDBC7CF);
+  static const Color footerMuted = Color(0xFFB99EA9);
+  static const Color footerAccent = Color(0xFFD19768);
+  static const Color footerAccentSoft = Color(0xFFE7B98A);
+  static const Color footerBorder = Color(0xFF54293E);
 
   // Add the official GoCart Instagram URL here when it is provided.
   // Keeping it in this file means the Home screen never needs to change.
@@ -794,7 +794,7 @@ void _showFooterInfoDialog(
     context: context,
     builder: (dialogContext) {
       return AlertDialog(
-        backgroundColor: const Color(0xFFFFF9FF),
+        backgroundColor: const Color(0xFFFBF6F0),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
         content: Text(

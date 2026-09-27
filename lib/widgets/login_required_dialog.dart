@@ -12,7 +12,7 @@ Future<void> showLoginRequiredDialog(
     barrierDismissible: true,
     builder: (dialogContext) {
       return AlertDialog(
-        backgroundColor: const Color(0xFFFFF9FF),
+        backgroundColor: const Color(0xFFFBF6F0),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: Column(
           children: [
@@ -20,13 +20,13 @@ Future<void> showLoginRequiredDialog(
               width: 64,
               height: 64,
               decoration: BoxDecoration(
-                color: const Color(0xFFF0E8F8),
+                color: const Color(0xFFF4E8E7),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: const Icon(
                 Icons.lock_outline_rounded,
                 size: 30,
-                color: Color(0xFF6F4B9B),
+                color: Color(0xFF541B3D),
               ),
             ),
             const SizedBox(height: 16),
@@ -50,7 +50,7 @@ Future<void> showLoginRequiredDialog(
                 Navigator.pop(dialogContext, true);
               },
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF6F4B9B),
+                backgroundColor: const Color(0xFF541B3D),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
@@ -71,7 +71,7 @@ Future<void> showLoginRequiredDialog(
             child: const Text(
               'Maybe Later',
               style: TextStyle(
-                color: Color(0xFF6F4B9B),
+                color: Color(0xFF541B3D),
                 fontWeight: FontWeight.w600,
               ),
             ),

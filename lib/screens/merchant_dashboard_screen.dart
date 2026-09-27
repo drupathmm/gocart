@@ -2,11 +2,15 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/product.dart';
+import '../providers/auth_provider.dart';
 import '../providers/product_provider.dart';
+import '../theme/app_theme.dart';
 import 'add_product_screen.dart';
 import 'edit_product_screen.dart';
+import 'login_screen.dart';
 import 'profile_screen.dart';
 
 class MerchantDashboardScreen extends ConsumerWidget {
@@ -14,42 +18,68 @@ class MerchantDashboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final productsAsync = ref.watch(myProductsProvider);
+    final authState = ref.watch(authUserIdProvider);
+    final merchantId =
+        authState.asData?.value ??
+        Supabase.instance.client.auth.currentUser?.id;
+    if (merchantId == null) {
+      return Scaffold(
+        backgroundColor: GoCartTheme.canvas,
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Please sign in to open your merchant dashboard.'),
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: () => Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  (_) => false,
+                ),
+                child: const Text('Sign in'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final merchantProductsProvider = myProductsProvider(merchantId);
+    final productsAsync = ref.watch(merchantProductsProvider);
+    final isDesktop = MediaQuery.sizeOf(context).width >= 1000;
 
     return Scaffold(
-      backgroundColor: _GoCartColors.background,
-      appBar: AppBar(
-        backgroundColor: _GoCartColors.background,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        titleSpacing: 20,
-        title: const _MerchantTopBar(),
-        actions: [
-          IconButton(
-            tooltip: 'Profile',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const ProfileScreen()),
-              );
-            },
-            icon: const Icon(Icons.account_circle_outlined, size: 27),
-          ),
-          const SizedBox(width: 14),
-        ],
-      ),
+      backgroundColor: GoCartTheme.canvas,
+      appBar: isDesktop
+          ? null
+          : AppBar(
+              backgroundColor: GoCartTheme.canvas,
+              surfaceTintColor: Colors.transparent,
+              elevation: 0,
+              automaticallyImplyLeading: false,
+              titleSpacing: 20,
+              title: const _MerchantTopBar(),
+              actions: [
+                IconButton(
+                  tooltip: 'Profile',
+                  onPressed: () => _openProfile(context),
+                  icon: const Icon(Icons.account_circle_outlined, size: 27),
+                ),
+                const SizedBox(width: 14),
+              ],
+            ),
       body: RefreshIndicator(
         color: _GoCartColors.primary,
         backgroundColor: Colors.white,
         onRefresh: () async {
-          await ref.read(myProductsProvider.notifier).refreshProducts();
+          await ref.read(merchantProductsProvider.notifier).refreshProducts();
         },
         child: productsAsync.when(
           loading: () => const _LoadingView(),
           error: (error, stackTrace) => _ErrorView(
             onRetry: () {
-              ref.read(myProductsProvider.notifier).refreshProducts();
+              ref.read(merchantProductsProvider.notifier).refreshProducts();
             },
           ),
           data: (products) {
@@ -59,7 +89,8 @@ class MerchantDashboardScreen extends ConsumerWidget {
                 await Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => const AddProductScreen(),
+                    builder: (context) =>
+                        AddProductScreen(merchantId: merchantId),
                   ),
                 );
 
@@ -67,7 +98,9 @@ class MerchantDashboardScreen extends ConsumerWidget {
                   return;
                 }
 
-                await ref.read(myProductsProvider.notifier).refreshProducts();
+                await ref
+                    .read(merchantProductsProvider.notifier)
+                    .refreshProducts();
               },
               onEditProduct: (product) async {
                 await Navigator.push(
@@ -81,15 +114,25 @@ class MerchantDashboardScreen extends ConsumerWidget {
                   return;
                 }
 
-                await ref.read(myProductsProvider.notifier).refreshProducts();
+                await ref
+                    .read(merchantProductsProvider.notifier)
+                    .refreshProducts();
               },
               onDeleteProduct: (product) async {
                 await _deleteProduct(context, ref, product);
               },
+              onOpenProfile: () => _openProfile(context),
             );
           },
         ),
       ),
+    );
+  }
+
+  void _openProfile(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const ProfileScreen()),
     );
   }
 
@@ -138,7 +181,9 @@ class MerchantDashboardScreen extends ConsumerWidget {
     }
 
     try {
-      await ref.read(myProductsProvider.notifier).deleteProduct(product.id);
+      await ref
+          .read(myProductsProvider(product.merchantId).notifier)
+          .deleteProduct(product.id);
 
       if (!context.mounted) {
         return;
@@ -171,28 +216,26 @@ class MerchantDashboardScreen extends ConsumerWidget {
 
 const List<String> _merchantCategories = [
   'Electronics',
+  'Mobiles & Tablets',
   'Fashion',
-  'Beauty',
-  'Home',
-  'Groceries',
-  'Sports',
-  'Books',
-  'Toys & Games',
-  'Health & Wellness',
-  'Other',
+  'Beauty & Personal Care',
+  'Home & Kitchen',
+  'Appliances',
+  'Grocery & Food',
+  'Sports & Fitness',
+  'Toys & Baby',
+  'Automotive',
 ];
 
 class _GoCartColors {
-  static const Color background = Color(0xFFFFF9FF);
+  static const Color primary = Color(0xFF541B3D);
 
-  static const Color primary = Color(0xFF6F4B9B);
+  static const Color primarySoft = Color(0xFFF1E1E6);
+  static const Color primaryLighter = Color(0xFFFBF4EF);
 
-  static const Color primarySoft = Color(0xFFF1E8FA);
-  static const Color primaryLighter = Color(0xFFF8F2FC);
-
-  static const Color text = Color(0xFF201A24);
-  static const Color muted = Color(0xFF766F7C);
-  static const Color border = Color(0xFFE9E0ED);
+  static const Color text = Color(0xFF281622);
+  static const Color muted = Color(0xFF76666C);
+  static const Color border = Color(0xFFEADDD5);
 
   static const Color success = Color(0xFF29965A);
   static const Color successSoft = Color(0xFFEAF8F0);
@@ -203,8 +246,8 @@ class _GoCartColors {
   static const Color error = Color(0xFFD84A4A);
   static const Color errorSoft = Color(0xFFFFEBEB);
 
-  static const Color blue = Color(0xFF4B72C8);
-  static const Color blueSoft = Color(0xFFEDF2FF);
+  static const Color blue = Color(0xFF9A673A);
+  static const Color blueSoft = Color(0xFFF8EBDD);
 }
 
 // ============================================================================
@@ -247,6 +290,371 @@ class _MerchantTopBar extends StatelessWidget {
   }
 }
 
+class _MerchantDesktopTopBar extends StatelessWidget {
+  final VoidCallback onOpenProfile;
+
+  const _MerchantDesktopTopBar({required this.onOpenProfile});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 76,
+      padding: const EdgeInsets.symmetric(horizontal: 28),
+      decoration: const BoxDecoration(
+        color: Color(0xFFFFFCF9),
+        border: Border(bottom: BorderSide(color: Color(0xFFEFE5DD))),
+      ),
+      child: Row(
+        children: [
+          const Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Merchant workspace',
+                style: TextStyle(
+                  color: _GoCartColors.text,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.2,
+                ),
+              ),
+              SizedBox(height: 3),
+              Text(
+                'Manage your catalog and store performance',
+                style: TextStyle(color: _GoCartColors.muted, fontSize: 11),
+              ),
+            ],
+          ),
+          const Spacer(),
+          TextButton.icon(
+            onPressed: onOpenProfile,
+            style: TextButton.styleFrom(
+              foregroundColor: _GoCartColors.text,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            icon: const CircleAvatar(
+              radius: 17,
+              backgroundColor: Color(0xFFF0DFE5),
+              child: Text(
+                'M',
+                style: TextStyle(
+                  color: _GoCartColors.primary,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            label: const Row(
+              children: [
+                Text('Merchant', style: TextStyle(fontWeight: FontWeight.w700)),
+                SizedBox(width: 5),
+                Icon(Icons.keyboard_arrow_down_rounded, size: 18),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MerchantSidebar extends StatelessWidget {
+  final String selected;
+  final ValueChanged<String> onNavigate;
+  final VoidCallback onAddProduct;
+
+  const _MerchantSidebar({
+    required this.selected,
+    required this.onNavigate,
+    required this.onAddProduct,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 270,
+      clipBehavior: Clip.antiAlias,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF28101F), Color(0xFF42192E), Color(0xFF311123)],
+        ),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            left: -115,
+            bottom: -100,
+            child: Container(
+              width: 360,
+              height: 250,
+              decoration: BoxDecoration(
+                border: Border.all(color: const Color(0x22D69A69), width: 1.4),
+                borderRadius: BorderRadius.circular(180),
+              ),
+            ),
+          ),
+          LayoutBuilder(
+            builder: (context, constraints) => SingleChildScrollView(
+              primary: false,
+              physics: const ClampingScrollPhysics(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: IntrinsicHeight(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 52,
+                              height: 52,
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFF9A456B),
+                                    Color(0xFF6B294B),
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: const Color(0x44F0C5A1),
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.shopping_cart_rounded,
+                                color: Colors.white,
+                                size: 26,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'GoCart',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 21,
+                                      height: 1.05,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  SizedBox(height: 4),
+                                  Text(
+                                    'MERCHANT PANEL',
+                                    style: TextStyle(
+                                      color: Color(0xFFCDB8C2),
+                                      fontSize: 9,
+                                      letterSpacing: 1.2,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 34),
+                        _MerchantNavItem(
+                          icon: Icons.home_rounded,
+                          label: 'Dashboard',
+                          selected: selected == 'Dashboard',
+                          onTap: () => onNavigate('Dashboard'),
+                        ),
+                        _MerchantNavItem(
+                          icon: Icons.inventory_2_outlined,
+                          label: 'Products',
+                          selected: selected == 'Products',
+                          onTap: () => onNavigate('Products'),
+                        ),
+                        _MerchantNavItem(
+                          icon: Icons.bar_chart_rounded,
+                          label: 'Analytics',
+                          selected: selected == 'Analytics',
+                          onTap: () => onNavigate('Analytics'),
+                        ),
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.all(15),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.07),
+                            borderRadius: BorderRadius.circular(19),
+                            border: Border.all(color: const Color(0x33F0C5A1)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                height: 76,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  gradient: const LinearGradient(
+                                    colors: [
+                                      Color(0xFF6B294B),
+                                      Color(0xFF482038),
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: const Icon(
+                                  Icons.shopping_bag_rounded,
+                                  size: 43,
+                                  color: Color(0xFFE7B98A),
+                                ),
+                              ),
+                              const SizedBox(height: 13),
+                              const Text(
+                                'Grow your business with GoCart',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                  height: 1.25,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              const Text(
+                                'Add products and keep your store up to date.',
+                                style: TextStyle(
+                                  color: Color(0xFFD4C1C8),
+                                  fontSize: 11,
+                                  height: 1.4,
+                                ),
+                              ),
+                              const SizedBox(height: 13),
+                              SizedBox(
+                                width: double.infinity,
+                                child: FilledButton.icon(
+                                  onPressed: onAddProduct,
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: const Color(0xFFE7B98A),
+                                    foregroundColor: const Color(0xFF371629),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  icon: const Icon(Icons.add_rounded, size: 18),
+                                  label: const Text(
+                                    'Add Product',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        const Text(
+                          'SECURE MERCHANT WORKSPACE',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Color(0xFFB99EA9),
+                            fontSize: 8,
+                            letterSpacing: 1.2,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MerchantNavItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _MerchantNavItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Ink(
+            padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),
+            decoration: BoxDecoration(
+              gradient: selected
+                  ? const LinearGradient(
+                      colors: [Color(0xFFF2D0AA), Color(0xFFE6B783)],
+                    )
+                  : null,
+              color: selected ? null : Colors.transparent,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: selected
+                  ? const [
+                      BoxShadow(
+                        color: Color(0x336E3A4E),
+                        blurRadius: 13,
+                        offset: Offset(0, 5),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 21,
+                  color: selected ? _GoCartColors.primary : Colors.white,
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                      color: selected ? _GoCartColors.primary : Colors.white,
+                    ),
+                  ),
+                ),
+                if (selected)
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: _GoCartColors.primary,
+                    size: 19,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ============================================================================
 // DASHBOARD
 // ============================================================================
@@ -256,12 +664,14 @@ class _DashboardContent extends StatefulWidget {
   final VoidCallback onAddProduct;
   final Future<void> Function(Product product) onEditProduct;
   final Future<void> Function(Product product) onDeleteProduct;
+  final VoidCallback onOpenProfile;
 
   const _DashboardContent({
     required this.products,
     required this.onAddProduct,
     required this.onEditProduct,
     required this.onDeleteProduct,
+    required this.onOpenProfile,
   });
 
   @override
@@ -269,7 +679,18 @@ class _DashboardContent extends StatefulWidget {
 }
 
 class _DashboardContentState extends State<_DashboardContent> {
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _analyticsKey = GlobalKey();
+  final GlobalKey _productsKey = GlobalKey();
+
   String? _selectedCategory;
+  String _selectedNavigation = 'Dashboard';
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   void didUpdateWidget(covariant _DashboardContent oldWidget) {
@@ -287,6 +708,62 @@ class _DashboardContentState extends State<_DashboardContent> {
     setState(() {
       _selectedCategory = category;
     });
+  }
+
+  Future<void> _navigateTo(String destination) async {
+    setState(() => _selectedNavigation = destination);
+
+    if (destination == 'Dashboard') {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeOutCubic,
+        );
+      }
+      return;
+    }
+
+    final targetContext = destination == 'Analytics'
+        ? _analyticsKey.currentContext
+        : _productsKey.currentContext;
+    if (targetContext != null) {
+      await Scrollable.ensureVisible(
+        targetContext,
+        duration: const Duration(milliseconds: 420),
+        curve: Curves.easeOutCubic,
+        alignment: 0.04,
+      );
+      return;
+    }
+
+    if (!_scrollController.hasClients) {
+      return;
+    }
+
+    final scrollPosition = _scrollController.position;
+    final fallbackOffset = destination == 'Analytics' ? 500.0 : 1200.0;
+    await _scrollController.animateTo(
+      math.min(fallbackOffset, scrollPosition.maxScrollExtent),
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOutCubic,
+    );
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) {
+      return;
+    }
+
+    final revealedContext = destination == 'Analytics'
+        ? _analyticsKey.currentContext
+        : _productsKey.currentContext;
+    if (revealedContext != null && revealedContext.mounted) {
+      await Scrollable.ensureVisible(
+        revealedContext,
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOutCubic,
+        alignment: 0.04,
+      );
+    }
   }
 
   @override
@@ -316,13 +793,12 @@ class _DashboardContentState extends State<_DashboardContent> {
         .where((product) => product.hasDiscount)
         .length;
 
-    final filteredProducts = _selectedCategory == null
-        ? products
-        : products
-              .where((product) => product.category == _selectedCategory)
-              .toList();
+    final filteredProducts = products.where((product) {
+      return _selectedCategory == null || product.category == _selectedCategory;
+    }).toList();
 
-    return ListView(
+    final dashboardContent = ListView(
+      controller: _scrollController,
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(18, 18, 18, 48),
       children: [
@@ -368,10 +844,13 @@ class _DashboardContentState extends State<_DashboardContent> {
                 // ==========================================================
                 // ANALYTICS
                 // ==========================================================
-                const _SectionHeader(
-                  title: 'Store Analytics',
-                  subtitle:
-                      'Understand your catalog and inventory at a glance.',
+                KeyedSubtree(
+                  key: _analyticsKey,
+                  child: const _SectionHeader(
+                    title: 'Store Analytics',
+                    subtitle:
+                        'Understand your catalog and inventory at a glance.',
+                  ),
                 ),
 
                 const SizedBox(height: 12),
@@ -472,34 +951,37 @@ class _DashboardContentState extends State<_DashboardContent> {
                 // ==========================================================
                 // PRODUCTS
                 // ==========================================================
-                _SectionHeader(
-                  title: _selectedCategory == null
-                      ? 'My Products'
-                      : '$_selectedCategory Products',
-                  subtitle: _selectedCategory == null
-                      ? (products.isEmpty
-                            ? 'Your product catalog is empty.'
-                            : '$totalProducts ${totalProducts == 1 ? 'product' : 'products'} in your catalog.')
-                      : (filteredProducts.isEmpty
-                            ? 'No products in this category.'
-                            : '${filteredProducts.length} ${filteredProducts.length == 1 ? 'product' : 'products'} in $_selectedCategory.'),
-                  trailing: FilledButton.icon(
-                    onPressed: widget.onAddProduct,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: _GoCartColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
+                KeyedSubtree(
+                  key: _productsKey,
+                  child: _SectionHeader(
+                    title: _selectedCategory == null
+                        ? 'My Products'
+                        : '$_selectedCategory Products',
+                    subtitle: _selectedCategory == null
+                        ? (products.isEmpty
+                              ? 'Your product catalog is empty.'
+                              : '$totalProducts ${totalProducts == 1 ? 'product' : 'products'} in your catalog.')
+                        : (filteredProducts.isEmpty
+                              ? 'No products in this category.'
+                              : '${filteredProducts.length} ${filteredProducts.length == 1 ? 'product' : 'products'} in $_selectedCategory.'),
+                    trailing: FilledButton.icon(
+                      onPressed: widget.onAddProduct,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _GoCartColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                      icon: const Icon(Icons.add_rounded, size: 18),
+                      label: const Text(
+                        'Add Product',
+                        style: TextStyle(fontWeight: FontWeight.w700),
                       ),
-                    ),
-                    icon: const Icon(Icons.add_rounded, size: 18),
-                    label: const Text(
-                      'Add Product',
-                      style: TextStyle(fontWeight: FontWeight.w700),
                     ),
                   ),
                 ),
@@ -534,6 +1016,33 @@ class _DashboardContentState extends State<_DashboardContent> {
         ),
       ],
     );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 1000) {
+          return dashboardContent;
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _MerchantSidebar(
+              selected: _selectedNavigation,
+              onNavigate: _navigateTo,
+              onAddProduct: widget.onAddProduct,
+            ),
+            Expanded(
+              child: Column(
+                children: [
+                  _MerchantDesktopTopBar(onOpenProfile: widget.onOpenProfile),
+                  Expanded(child: dashboardContent),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -552,66 +1061,91 @@ class _DashboardHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFFF3E9FB), Color(0xFFFFF9FF)],
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFE7D9EF)),
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 570;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 760;
+        final date = MaterialLocalizations.of(
+          context,
+        ).formatMediumDate(DateTime.now());
 
-          if (compact) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _HeaderIcon(),
-                const SizedBox(height: 16),
-                _HeaderText(productCount: productCount),
-                const SizedBox(height: 18),
-                _AddProductButton(onPressed: onAddProduct, expanded: true),
-              ],
-            );
-          }
-
-          return Row(
-            children: [
-              const _HeaderIcon(),
-              const SizedBox(width: 16),
-              Expanded(child: _HeaderText(productCount: productCount)),
-              const SizedBox(width: 16),
-              _AddProductButton(onPressed: onAddProduct),
+        return Container(
+          clipBehavior: Clip.antiAlias,
+          padding: EdgeInsets.all(compact ? 20 : 24),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFFFFF9F1), Color(0xFFF2E2D7), Color(0xFFFAF0E6)],
+            ),
+            borderRadius: BorderRadius.circular(25),
+            border: Border.all(color: const Color(0xFFEAD8C9)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x14541B3D),
+                blurRadius: 27,
+                offset: Offset(0, 8),
+              ),
             ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _HeaderIcon extends StatelessWidget {
-  const _HeaderIcon();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 52,
-      height: 52,
-      decoration: BoxDecoration(
-        color: _GoCartColors.primary,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: const Icon(
-        Icons.dashboard_customize_rounded,
-        color: Colors.white,
-        size: 26,
-      ),
+          ),
+          child: Stack(
+            children: [
+              Positioned(
+                right: compact ? -100 : 145,
+                top: -155,
+                child: Container(
+                  width: 310,
+                  height: 310,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: 0.42),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: compact ? -50 : 120,
+                bottom: -92,
+                child: Container(
+                  width: 300,
+                  height: 155,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(180),
+                    gradient: const LinearGradient(
+                      colors: [Color(0x44A85274), Color(0x0FE7B98A)],
+                    ),
+                  ),
+                ),
+              ),
+              if (compact)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _HeaderText(productCount: productCount),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(child: _DateChip(date: date)),
+                        const SizedBox(width: 10),
+                        _AddProductButton(onPressed: onAddProduct),
+                      ],
+                    ),
+                  ],
+                )
+              else
+                Row(
+                  children: [
+                    Expanded(child: _HeaderText(productCount: productCount)),
+                    const SizedBox(width: 14),
+                    _DateChip(date: date),
+                    const SizedBox(width: 11),
+                    _AddProductButton(onPressed: onAddProduct),
+                    const SizedBox(width: 10),
+                    const _MerchantHeroIllustration(),
+                  ],
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -627,22 +1161,24 @@ class _HeaderText extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Merchant Dashboard',
+          'Welcome back, Merchant! 👋',
           style: TextStyle(
-            fontSize: 26,
-            fontWeight: FontWeight.w800,
-            color: _GoCartColors.text,
-            letterSpacing: -0.7,
+            fontFamily: 'Georgia',
+            fontSize: 29,
+            height: 1.1,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF351323),
+            letterSpacing: -0.4,
           ),
         ),
         const SizedBox(height: 5),
         Text(
-          'Manage your store, products and inventory in one place.',
+          "Here's what's happening with your store today.",
           style: const TextStyle(fontSize: 13, color: _GoCartColors.muted),
         ),
         const SizedBox(height: 9),
         Text(
-          '$productCount ${productCount == 1 ? 'product' : 'products'} currently in your catalog',
+          '$productCount ${productCount == 1 ? 'product' : 'products'} in your catalog',
           style: const TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w700,
@@ -654,11 +1190,111 @@ class _HeaderText extends StatelessWidget {
   }
 }
 
+class _DateChip extends StatelessWidget {
+  final String date;
+
+  const _DateChip({required this.date});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.84),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFEADDD5)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.calendar_month_rounded,
+            size: 19,
+            color: _GoCartColors.primary,
+          ),
+          const SizedBox(width: 9),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Today',
+                style: TextStyle(
+                  fontSize: 9,
+                  color: _GoCartColors.muted,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                date,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: _GoCartColors.text,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MerchantHeroIllustration extends StatelessWidget {
+  const _MerchantHeroIllustration();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 118,
+      height: 100,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Container(
+            width: 92,
+            height: 92,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white.withValues(alpha: 0.58),
+            ),
+          ),
+          const Positioned(
+            bottom: 10,
+            child: Icon(
+              Icons.shopping_bag_rounded,
+              size: 73,
+              color: Color(0xFF6B294B),
+            ),
+          ),
+          const Positioned(
+            top: 9,
+            right: 4,
+            child: Icon(
+              Icons.auto_awesome_rounded,
+              size: 20,
+              color: Color(0xFFC28B5B),
+            ),
+          ),
+          const Positioned(
+            bottom: 12,
+            left: 0,
+            child: Icon(
+              Icons.inventory_2_rounded,
+              size: 27,
+              color: Color(0xFFAE704E),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _AddProductButton extends StatelessWidget {
   final VoidCallback onPressed;
-  final bool expanded;
 
-  const _AddProductButton({required this.onPressed, this.expanded = false});
+  const _AddProductButton({required this.onPressed});
 
   @override
   Widget build(BuildContext context) {
@@ -676,10 +1312,6 @@ class _AddProductButton extends StatelessWidget {
         style: TextStyle(fontWeight: FontWeight.w700),
       ),
     );
-
-    if (expanded) {
-      return SizedBox(width: double.infinity, child: button);
-    }
 
     return button;
   }
@@ -881,7 +1513,7 @@ class _InventorySummary extends StatelessWidget {
       decoration: BoxDecoration(
         color: _GoCartColors.primaryLighter,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFE9DDF2)),
+        border: Border.all(color: _GoCartColors.border),
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -1380,7 +2012,7 @@ class _ChartHoverTooltip extends StatelessWidget {
         constraints: const BoxConstraints(minWidth: 150, maxWidth: 220),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: const Color(0xFF2B2133),
+          color: const Color(0xFF361626),
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
@@ -1409,7 +2041,7 @@ class _ChartHoverTooltip extends StatelessWidget {
               Text(
                 line,
                 style: const TextStyle(
-                  color: Color(0xFFE9DFF0),
+                  color: Color(0xFFF0DAD0),
                   fontSize: 10,
                   height: 1.4,
                 ),
@@ -1554,10 +2186,10 @@ class _SalesAnalyticsCard extends StatelessWidget {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFFF4ECFB), Color(0xFFFFFBFF)],
+          colors: [Color(0xFFF7E9DC), Color(0xFFFFFCF9)],
         ),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE6D8EF)),
+        border: Border.all(color: const Color(0xFFEADDD5)),
       ),
       child: Row(
         children: [
@@ -2798,18 +3430,18 @@ class _BarChartPainter extends CustomPainter {
 // ============================================================================
 
 const List<Color> _categoryColors = [
-  Color(0xFF7652A5),
-  Color(0xFF9A78C2),
-  Color(0xFFB995D7),
-  Color(0xFF5E83C6),
+  Color(0xFF541B3D),
+  Color(0xFF9A456B),
+  Color(0xFFC28B5B),
+  Color(0xFFE7B98A),
   Color(0xFF65A58A),
-  Color(0xFFE19A51),
   Color(0xFFD16B83),
+  Color(0xFF7D4056),
 ];
 
 List<Color> _chartColors(int count) {
   if (count <= 0) {
-    return const [Color(0xFF7652A5)];
+    return const [Color(0xFF541B3D)];
   }
 
   return List<Color>.generate(

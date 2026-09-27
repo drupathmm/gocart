@@ -48,15 +48,15 @@ class ProfileScreen extends ConsumerWidget {
     return profileAsync.when(
       loading: () {
         return const Scaffold(
-          backgroundColor: Color(0xFFFFF9FF),
+          backgroundColor: Color(0xFFFBF6F0),
           body: Center(
-            child: CircularProgressIndicator(color: Color(0xFF6F4B9B)),
+            child: CircularProgressIndicator(color: Color(0xFF541B3D)),
           ),
         );
       },
       error: (error, stackTrace) {
         return Scaffold(
-          backgroundColor: const Color(0xFFFFF9FF),
+          backgroundColor: const Color(0xFFFBF6F0),
           body: Center(
             child: Padding(
               padding: const EdgeInsets.all(24),
@@ -97,7 +97,7 @@ class ProfileScreen extends ConsumerWidget {
                       icon: const Icon(Icons.refresh_rounded),
                       label: const Text('Try Again'),
                       style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF6F4B9B),
+                        backgroundColor: const Color(0xFF541B3D),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 24,
@@ -154,7 +154,7 @@ class _GuestProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF9FF),
+      backgroundColor: const Color(0xFFFBF6F0),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -171,13 +171,13 @@ class _GuestProfileScreen extends StatelessWidget {
                     width: 100,
                     height: 100,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF0E8F8),
+                      color: const Color(0xFFF4E8E7),
                       borderRadius: BorderRadius.circular(30),
                     ),
                     child: const Icon(
                       Icons.person_outline_rounded,
                       size: 52,
-                      color: Color(0xFF6F4B9B),
+                      color: Color(0xFF541B3D),
                     ),
                   ),
 
@@ -223,7 +223,7 @@ class _GuestProfileScreen extends StatelessWidget {
                     child: FilledButton(
                       onPressed: onLogin,
                       style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFF6F4B9B),
+                        backgroundColor: const Color(0xFF541B3D),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 15),
                         shape: RoundedRectangleBorder(
@@ -248,7 +248,7 @@ class _GuestProfileScreen extends StatelessWidget {
                   TextButton(
                     onPressed: onContinueBrowsing,
                     style: TextButton.styleFrom(
-                      foregroundColor: const Color(0xFF6F4B9B),
+                      foregroundColor: const Color(0xFF541B3D),
                       padding: const EdgeInsets.symmetric(
                         horizontal: 20,
                         vertical: 12,
