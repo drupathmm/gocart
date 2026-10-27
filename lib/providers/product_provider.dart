@@ -22,15 +22,30 @@ final productsProvider = AsyncNotifierProvider<ProductsNotifier, List<Product>>(
 );
 
 class ProductsNotifier extends AsyncNotifier<List<Product>> {
+  static const int _pageSize = 24;
   int _requestVersion = 0;
+  int _nextOffset = 0;
+  bool _hasMore = true;
+  bool _isLoadingMore = false;
+  String? _loadMoreError;
+  Future<List<Product>> Function(int offset, int limit)? _loadPage;
+
+  bool get hasMore => _hasMore;
+  bool get isLoadingMore => _isLoadingMore;
+  String? get loadMoreError => _loadMoreError;
 
   @override
   Future<List<Product>> build() async {
     final requestVersion = _requestVersion;
-    final products = await ref.read(productServiceProvider).getAllProducts();
+    final service = ref.read(productServiceProvider);
+    _loadPage = (offset, limit) =>
+        service.getAllProducts(offset: offset, limit: limit);
+    final products = await _loadPage!(0, _pageSize);
     if (requestVersion != _requestVersion) {
       return state.asData?.value ?? const <Product>[];
     }
+    _nextOffset = products.length;
+    _hasMore = products.length == _pageSize;
     return products;
   }
 
@@ -39,15 +54,10 @@ class ProductsNotifier extends AsyncNotifier<List<Product>> {
   // --------------------------------------------------
 
   Future<void> refreshProducts() async {
-    final requestVersion = ++_requestVersion;
-    state = const AsyncLoading();
-
-    final result = await AsyncValue.guard(
-      () => ref.read(productServiceProvider).getAllProducts(),
+    final service = ref.read(productServiceProvider);
+    await _loadFirstPage(
+      (offset, limit) => service.getAllProducts(offset: offset, limit: limit),
     );
-    if (requestVersion == _requestVersion) {
-      state = result;
-    }
   }
 
   // --------------------------------------------------
@@ -55,15 +65,11 @@ class ProductsNotifier extends AsyncNotifier<List<Product>> {
   // --------------------------------------------------
 
   Future<void> search(String searchText) async {
-    final requestVersion = ++_requestVersion;
-    state = const AsyncLoading();
-
-    final result = await AsyncValue.guard(
-      () => ref.read(productServiceProvider).searchProducts(searchText),
+    final service = ref.read(productServiceProvider);
+    await _loadFirstPage(
+      (offset, limit) =>
+          service.searchProducts(searchText, offset: offset, limit: limit),
     );
-    if (requestVersion == _requestVersion) {
-      state = result;
-    }
   }
 
   // --------------------------------------------------
@@ -71,14 +77,60 @@ class ProductsNotifier extends AsyncNotifier<List<Product>> {
   // --------------------------------------------------
 
   Future<void> filterByCategory(String category) async {
-    final requestVersion = ++_requestVersion;
-    state = const AsyncLoading();
-
-    final result = await AsyncValue.guard(
-      () => ref.read(productServiceProvider).getProductsByCategory(category),
+    final service = ref.read(productServiceProvider);
+    await _loadFirstPage(
+      (offset, limit) =>
+          service.getProductsByCategory(category, offset: offset, limit: limit),
     );
-    if (requestVersion == _requestVersion) {
-      state = result;
+  }
+
+  Future<void> _loadFirstPage(
+    Future<List<Product>> Function(int offset, int limit) loader,
+  ) async {
+    final requestVersion = ++_requestVersion;
+    _loadPage = loader;
+    _nextOffset = 0;
+    _hasMore = true;
+    _isLoadingMore = false;
+    _loadMoreError = null;
+    state = const AsyncLoading();
+    final result = await AsyncValue.guard(() => loader(0, _pageSize));
+    if (requestVersion != _requestVersion) return;
+    if (result case AsyncData(:final value)) {
+      _nextOffset = value.length;
+      _hasMore = value.length == _pageSize;
+    }
+    state = result;
+  }
+
+  Future<void> loadMoreProducts() async {
+    final current = state.asData?.value;
+    final loader = _loadPage;
+    if (current == null || !_hasMore || _isLoadingMore || loader == null) {
+      return;
+    }
+
+    final requestVersion = _requestVersion;
+    _isLoadingMore = true;
+    _loadMoreError = null;
+    state = AsyncData(List<Product>.of(current));
+    try {
+      final nextPage = await loader(_nextOffset, _pageSize);
+      if (requestVersion != _requestVersion) return;
+      _nextOffset += nextPage.length;
+      _hasMore = nextPage.length == _pageSize;
+      state = AsyncData([...current, ...nextPage]);
+    } catch (_) {
+      if (requestVersion == _requestVersion) {
+        _loadMoreError = 'Could not load more products. Try again.';
+        state = AsyncData(List<Product>.of(current));
+      }
+    } finally {
+      if (requestVersion == _requestVersion) {
+        _isLoadingMore = false;
+        final latest = state.asData?.value;
+        if (latest != null) state = AsyncData(List<Product>.of(latest));
+      }
     }
   }
 

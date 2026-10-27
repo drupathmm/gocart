@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/cart_item.dart';
+import '../models/checkout_exception.dart';
 import '../models/demo_order.dart';
 import '../providers/cart_provider.dart';
 import '../providers/order_provider.dart';
+import '../services/checkout_attempt_store.dart';
 import '../theme/app_theme.dart';
 import 'login_screen.dart';
 import 'order_history_screen.dart';
+import 'razorpay_payment_screen.dart';
 import 'user_home_screen.dart';
 
 class CheckoutScreen extends ConsumerStatefulWidget {
@@ -20,8 +24,17 @@ class CheckoutScreen extends ConsumerStatefulWidget {
 
 class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   bool _isPlacingOrder = false;
+  final _offerController = TextEditingController();
+  String? _restoredCartFingerprint;
+  String? _restoringCartFingerprint;
 
-  Future<void> _placeDemoOrder() async {
+  @override
+  void dispose() {
+    _offerController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _placeOrder() async {
     if (_isPlacingOrder) return;
     final buyerId = Supabase.instance.client.auth.currentUser?.id;
     if (buyerId == null) {
@@ -31,28 +44,72 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
     setState(() => _isPlacingOrder = true);
     try {
+      final items = ref.read(cartProvider).asData?.value ?? const [];
+      final cartFingerprint = CheckoutAttemptStore.cartFingerprint(
+        items.map(
+          (item) => (
+            cartItemId: item.id,
+            productId: item.productId,
+            quantity: item.quantity,
+          ),
+        ),
+      );
+      final attemptStore = ref.read(checkoutAttemptStoreProvider);
+      final attempt = await attemptStore.prepare(
+        userId: buyerId,
+        cartFingerprint: cartFingerprint,
+        offerCode: _offerController.text,
+      );
       final receipt = await ref
           .read(orderServiceProvider)
-          .placeDemoOrder(buyerId);
+          .checkout(
+            expectedBuyerId: buyerId,
+            idempotencyKey: attempt.idempotencyKey,
+            offerCode: attempt.offerCode,
+          );
+      await attemptStore.markCompleted(
+        userId: buyerId,
+        idempotencyKey: attempt.idempotencyKey,
+      );
 
       if (!mounted) return;
-      await ref.read(cartProvider.notifier).refreshCart();
+      try {
+        await ref.read(cartProvider.notifier).refreshCart();
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint(
+            'Order was created, but the cart refresh failed: ${error.runtimeType}',
+          );
+        }
+      }
       if (!mounted) return;
 
-      Navigator.pushReplacement(
+      await Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => DemoOrderSuccessScreen(receipt: receipt),
+          builder: (_) => RazorpayPaymentScreen(orderId: receipt.id),
         ),
+      );
+      if (!mounted) return;
+      ref.invalidate(myOrdersProvider(buyerId));
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const OrderHistoryScreen()),
       );
     } catch (error) {
       if (!mounted) return;
-      final message = error is PostgrestException
+      final message = error is CheckoutAttemptPersistenceException
+          ? error.toString()
+          : error is CheckoutException
           ? error.message
-          : error.toString().replaceFirst('Exception: ', '');
-      _showMessage(
-        message.isEmpty ? 'Could not place the demo order.' : message,
-      );
+          : error is FunctionException
+          ? CheckoutException.fromCode(error.details?.toString() ?? '').message
+          : error is PostgrestException
+          ? 'Could not complete checkout. Please try again.'
+          : error is FormatException
+          ? 'The checkout details are invalid. Please review them and try again.'
+          : 'Could not complete checkout. Please try again.';
+      _showMessage(message.isEmpty ? 'Could not complete checkout.' : message);
     } finally {
       if (mounted) setState(() => _isPlacingOrder = false);
     }
@@ -120,27 +177,76 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 ),
               );
             }
+            final cartFingerprint = CheckoutAttemptStore.cartFingerprint(
+              items.map(
+                (item) => (
+                  cartItemId: item.id,
+                  productId: item.productId,
+                  quantity: item.quantity,
+                ),
+              ),
+            );
+            if (_restoredCartFingerprint != cartFingerprint) {
+              if (_restoringCartFingerprint != cartFingerprint) {
+                _restoringCartFingerprint = cartFingerprint;
+                _restoreOfferDraft(userId, cartFingerprint);
+              }
+              return const Center(
+                child: CircularProgressIndicator(color: GoCartTheme.brand),
+              );
+            }
             return _CheckoutContent(
               items: items,
               isPlacingOrder: _isPlacingOrder,
-              onPlaceOrder: _placeDemoOrder,
+              offerController: _offerController,
+              onPlaceOrderWithPayment: _placeOrder,
+              canUseRazorpay:
+                  !kIsWeb &&
+                  (defaultTargetPlatform == TargetPlatform.android ||
+                      defaultTargetPlatform == TargetPlatform.iOS),
             );
           },
         ),
       ),
     );
   }
+
+  Future<void> _restoreOfferDraft(String userId, String cartFingerprint) async {
+    try {
+      final attempt = await ref
+          .read(checkoutAttemptStoreProvider)
+          .pendingForCart(userId: userId, cartFingerprint: cartFingerprint);
+      if (!mounted) return;
+      if (attempt != null && _offerController.text.isEmpty) {
+        _offerController.text = attempt.offerCode;
+      }
+    } catch (_) {
+      // Checkout preparation will show a friendly storage error if saving the
+      // retry key itself is unavailable. Do not display raw storage details.
+    } finally {
+      if (mounted) {
+        setState(() {
+          _restoredCartFingerprint = cartFingerprint;
+          _restoringCartFingerprint = null;
+        });
+      }
+    }
+  }
 }
 
 class _CheckoutContent extends StatelessWidget {
   final List<CartItem> items;
   final bool isPlacingOrder;
-  final VoidCallback onPlaceOrder;
+  final TextEditingController offerController;
+  final VoidCallback onPlaceOrderWithPayment;
+  final bool canUseRazorpay;
 
   const _CheckoutContent({
     required this.items,
     required this.isPlacingOrder,
-    required this.onPlaceOrder,
+    required this.offerController,
+    required this.onPlaceOrderWithPayment,
+    required this.canUseRazorpay,
   });
 
   @override
@@ -169,7 +275,9 @@ class _CheckoutContent extends StatelessWidget {
       savings: savings,
       canPlaceOrder: canPlaceOrder,
       isPlacingOrder: isPlacingOrder,
-      onPlaceOrder: onPlaceOrder,
+      offerController: offerController,
+      onPlaceOrderWithPayment: onPlaceOrderWithPayment,
+      canUseRazorpay: canUseRazorpay,
     );
 
     return SingleChildScrollView(
@@ -192,7 +300,7 @@ class _CheckoutContent extends StatelessWidget {
                 ).textTheme.bodyMedium?.copyWith(color: Colors.black54),
               ),
               const SizedBox(height: 20),
-              const _DemoPaymentBanner(),
+              _PaymentAvailabilityBanner(canUseRazorpay: canUseRazorpay),
               const SizedBox(height: 18),
               if (unavailable) ...[
                 const _StockWarning(),
@@ -220,35 +328,50 @@ class _CheckoutContent extends StatelessWidget {
   }
 }
 
-class _DemoPaymentBanner extends StatelessWidget {
-  const _DemoPaymentBanner();
+class _PaymentAvailabilityBanner extends StatelessWidget {
+  final bool canUseRazorpay;
+
+  const _PaymentAvailabilityBanner({required this.canUseRazorpay});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(17),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF2E2),
+        color: canUseRazorpay
+            ? const Color(0xFFEAF6EE)
+            : const Color(0xFFFFF2E2),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFECC99D)),
+        border: Border.all(
+          color: canUseRazorpay
+              ? const Color(0xFFB5DCC2)
+              : const Color(0xFFECC99D),
+        ),
       ),
-      child: const Row(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.science_outlined, color: GoCartTheme.brand),
-          SizedBox(width: 12),
+          Icon(
+            canUseRazorpay ? Icons.lock_outline : Icons.info_outline,
+            color: GoCartTheme.brand,
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Demo checkout only',
+                  canUseRazorpay
+                      ? 'Razorpay test checkout'
+                      : 'Browser checkout is unavailable',
                   style: TextStyle(fontWeight: FontWeight.w800),
                 ),
-                SizedBox(height: 3),
+                const SizedBox(height: 3),
                 Text(
-                  'No card details are requested and no real payment will be taken.',
-                  style: TextStyle(height: 1.4, color: Color(0xFF685652)),
+                  canUseRazorpay
+                      ? 'No real payment will be taken. GoCart confirms payment with the server before marking your order paid.'
+                      : 'Razorpay checkout is currently supported in the Android and iOS apps. Your order has not been submitted.',
+                  style: const TextStyle(height: 1.4, color: Color(0xFF685652)),
                 ),
               ],
             ),
@@ -377,7 +500,9 @@ class _CheckoutSummary extends StatelessWidget {
   final double savings;
   final bool canPlaceOrder;
   final bool isPlacingOrder;
-  final VoidCallback onPlaceOrder;
+  final TextEditingController offerController;
+  final VoidCallback onPlaceOrderWithPayment;
+  final bool canUseRazorpay;
 
   const _CheckoutSummary({
     required this.total,
@@ -385,7 +510,9 @@ class _CheckoutSummary extends StatelessWidget {
     required this.savings,
     required this.canPlaceOrder,
     required this.isPlacingOrder,
-    required this.onPlaceOrder,
+    required this.offerController,
+    required this.onPlaceOrderWithPayment,
+    required this.canUseRazorpay,
   });
 
   @override
@@ -405,31 +532,52 @@ class _CheckoutSummary extends StatelessWidget {
             _MoneyRow(label: 'Savings', value: -savings, isSaving: true),
           ],
           const SizedBox(height: 12),
-          const _MoneyRow(label: 'Demo payment', valueText: 'No charge'),
+          _MoneyRow(
+            label: 'Payment method',
+            valueText: canUseRazorpay ? 'Razorpay test mode' : 'Unavailable',
+          ),
           const Divider(height: 24),
           _MoneyRow(label: 'Total', value: total, isTotal: true),
-          const SizedBox(height: 18),
-          FilledButton.icon(
-            onPressed: canPlaceOrder ? onPlaceOrder : null,
-            icon: isPlacingOrder
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Icons.check_circle_outline_rounded),
-            label: Text(
-              isPlacingOrder ? 'Placing demo order…' : 'Place demo order',
+          const SizedBox(height: 14),
+          TextField(
+            controller: offerController,
+            enabled: !isPlacingOrder,
+            textCapitalization: TextCapitalization.characters,
+            decoration: const InputDecoration(
+              labelText: 'Offer code (optional)',
+              hintText: 'SAVE10',
             ),
           ),
+          const SizedBox(height: 18),
+          if (canUseRazorpay) ...[
+            FilledButton.icon(
+              onPressed: canPlaceOrder ? onPlaceOrderWithPayment : null,
+              icon: isPlacingOrder
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.lock_outline),
+              label: Text(
+                isPlacingOrder ? 'Preparing payment…' : 'Pay with Razorpay',
+              ),
+            ),
+          ],
           const SizedBox(height: 9),
-          const Text(
-            'This records a test order and reduces demo inventory. It does not process money.',
+          Text(
+            canUseRazorpay
+                ? 'The order is confirmed only after GoCart verifies the payment.'
+                : 'Use the Android or iOS app to complete a Razorpay test payment.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 11, height: 1.4, color: Colors.black54),
+            style: const TextStyle(
+              fontSize: 11,
+              height: 1.4,
+              color: Colors.black54,
+            ),
           ),
         ],
       ),
@@ -544,6 +692,13 @@ class DemoOrderSuccessScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final status = receipt.paymentStatus;
+    final paymentMessage = status == null || status.isEmpty
+        ? 'No real payment was taken. The database did not return a payment status.'
+        : status == 'unpaid'
+        ? 'No real payment was taken. The database records this order as unpaid.'
+        : 'No real payment was taken. The database records payment status as ${status.replaceAll('_', ' ')}.';
+
     return Scaffold(
       backgroundColor: GoCartTheme.canvas,
       body: SafeArea(
@@ -570,18 +725,15 @@ class DemoOrderSuccessScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 18),
                     Text(
-                      'Demo order placed!',
+                      'Order created',
                       style: Theme.of(context).textTheme.headlineMedium,
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
-                    const Text(
-                      'The demo payment succeeded. No real payment was taken.',
-                      textAlign: TextAlign.center,
-                    ),
+                    Text(paymentMessage, textAlign: TextAlign.center),
                     const SizedBox(height: 18),
                     _MoneyRow(
-                      label: 'Demo total',
+                      label: 'Order total',
                       value: receipt.total,
                       isTotal: true,
                     ),

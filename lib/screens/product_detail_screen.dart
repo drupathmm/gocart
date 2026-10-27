@@ -3,8 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/product.dart';
+import '../navigation/cart_navigation.dart';
 import '../providers/cart_provider.dart';
-import 'cart_screen.dart';
+import '../widgets/product_cart_quantity_badge.dart';
 import '../widgets/login_required_dialog.dart';
 
 // ============================================================================
@@ -31,6 +32,11 @@ class ProductDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final isOutOfStock = product.stock <= 0;
+    final cartState = ref.watch(cartProvider);
+    final cartQuantity = cartState.maybeWhen(
+      data: (items) => cartQuantityForProduct(items, product.id),
+      orElse: () => 0,
+    );
     final width = MediaQuery.of(context).size.width;
     final isDesktop = width >= 850;
 
@@ -66,9 +72,9 @@ class ProductDetailScreen extends ConsumerWidget {
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: EdgeInsets.fromLTRB(
-            isDesktop ? 36 : 18,
+            isDesktop ? 36 : 16,
             12,
-            isDesktop ? 36 : 18,
+            isDesktop ? 36 : 16,
             40,
           ),
           child: Center(
@@ -78,11 +84,17 @@ class ProductDetailScreen extends ConsumerWidget {
                   ? _DesktopLayout(
                       product: product,
                       isOutOfStock: isOutOfStock,
+                      cartQuantity: cartQuantity,
+                      cartLoading: cartState.isLoading,
+                      cartHasError: cartState.hasError,
                       ref: ref,
                     )
                   : _MobileLayout(
                       product: product,
                       isOutOfStock: isOutOfStock,
+                      cartQuantity: cartQuantity,
+                      cartLoading: cartState.isLoading,
+                      cartHasError: cartState.hasError,
                       ref: ref,
                     ),
             ),
@@ -100,11 +112,17 @@ class ProductDetailScreen extends ConsumerWidget {
 class _DesktopLayout extends StatelessWidget {
   final Product product;
   final bool isOutOfStock;
+  final int cartQuantity;
+  final bool cartLoading;
+  final bool cartHasError;
   final WidgetRef ref;
 
   const _DesktopLayout({
     required this.product,
     required this.isOutOfStock,
+    required this.cartQuantity,
+    required this.cartLoading,
+    required this.cartHasError,
     required this.ref,
   });
 
@@ -125,6 +143,9 @@ class _DesktopLayout extends StatelessWidget {
               child: _ProductInformation(
                 product: product,
                 isOutOfStock: isOutOfStock,
+                cartQuantity: cartQuantity,
+                cartLoading: cartLoading,
+                cartHasError: cartHasError,
                 ref: ref,
               ),
             ),
@@ -142,11 +163,17 @@ class _DesktopLayout extends StatelessWidget {
 class _MobileLayout extends StatelessWidget {
   final Product product;
   final bool isOutOfStock;
+  final int cartQuantity;
+  final bool cartLoading;
+  final bool cartHasError;
   final WidgetRef ref;
 
   const _MobileLayout({
     required this.product,
     required this.isOutOfStock,
+    required this.cartQuantity,
+    required this.cartLoading,
+    required this.cartHasError,
     required this.ref,
   });
 
@@ -156,12 +183,15 @@ class _MobileLayout extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _Breadcrumb(),
-        const SizedBox(height: 14),
+        const SizedBox(height: 10),
         _ProductGallery(product: product),
-        const SizedBox(height: 24),
+        const SizedBox(height: 18),
         _ProductInformation(
           product: product,
           isOutOfStock: isOutOfStock,
+          cartQuantity: cartQuantity,
+          cartLoading: cartLoading,
+          cartHasError: cartHasError,
           ref: ref,
         ),
       ],
@@ -224,13 +254,16 @@ class _ProductGallery extends StatelessWidget {
   Widget build(BuildContext context) {
     final imageUrl = product.imageUrl?.trim();
     final hasImage = imageUrl != null && imageUrl.isNotEmpty;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isPhone = screenWidth < 600;
+    final galleryHeight = isPhone ? (screenWidth < 360 ? 245.0 : 300.0) : 500.0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           width: double.infinity,
-          height: 500,
+          height: galleryHeight,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(24),
             color: _GoCartColors.darkPurple,
@@ -269,12 +302,12 @@ class _ProductGallery extends StatelessWidget {
                 : const _ImagePlaceholder(),
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: isPhone ? 9 : 12),
         Row(
           children: [
             Container(
-              width: 76,
-              height: 64,
+              width: isPhone ? 64 : 76,
+              height: isPhone ? 54 : 64,
               decoration: BoxDecoration(
                 color: _GoCartColors.softPurple,
                 borderRadius: BorderRadius.circular(12),
@@ -299,7 +332,7 @@ class _ProductGallery extends StatelessWidget {
                       ),
               ),
             ),
-            const SizedBox(width: 10),
+            SizedBox(width: isPhone ? 8 : 10),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
@@ -340,39 +373,46 @@ class _ProductGallery extends StatelessWidget {
 class _ProductInformation extends StatelessWidget {
   final Product product;
   final bool isOutOfStock;
+  final int cartQuantity;
+  final bool cartLoading;
+  final bool cartHasError;
   final WidgetRef ref;
 
   const _ProductInformation({
     required this.product,
     required this.isOutOfStock,
+    required this.cartQuantity,
+    required this.cartLoading,
+    required this.cartHasError,
     required this.ref,
   });
 
   @override
   Widget build(BuildContext context) {
     final description = product.description.trim();
+    final isPhone = MediaQuery.sizeOf(context).width < 600;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _StockBadge(stock: product.stock),
-        const SizedBox(height: 16),
+        SizedBox(height: isPhone ? 12 : 16),
         Text(
           product.name,
-          style: const TextStyle(
-            fontSize: 32,
+          style: TextStyle(
+            fontSize: isPhone ? 26 : 32,
             fontWeight: FontWeight.w800,
             letterSpacing: -0.8,
             height: 1.15,
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: isPhone ? 8 : 12),
 
         // Offer price
         Text(
           '₹${product.offerPrice.toStringAsFixed(2)}',
-          style: const TextStyle(
-            fontSize: 30,
+          style: TextStyle(
+            fontSize: isPhone ? 25 : 30,
             fontWeight: FontWeight.w800,
             color: _GoCartColors.purple,
             letterSpacing: -0.5,
@@ -413,17 +453,32 @@ class _ProductInformation extends StatelessWidget {
           ),
         ],
 
-        const SizedBox(height: 22),
+        SizedBox(height: isPhone ? 16 : 22),
         _ProductMeta(product: product),
-        const SizedBox(height: 22),
+        SizedBox(height: isPhone ? 16 : 22),
         _DescriptionCard(description: description),
-        const SizedBox(height: 22),
+        SizedBox(height: isPhone ? 16 : 22),
+        if (cartHasError)
+          const Text(
+            'Cart quantity is temporarily unavailable. Refresh your cart to check it.',
+            style: TextStyle(fontSize: 12, color: Colors.redAccent),
+          )
+        else if (cartLoading)
+          const LinearProgressIndicator(minHeight: 2)
+        else if (cartQuantity > 0)
+          ProductCartQuantityBadge(quantity: cartQuantity)
+        else
+          const Text(
+            'This product is not in your cart yet.',
+            style: TextStyle(fontSize: 12, color: Colors.black54),
+          ),
+        SizedBox(height: isPhone ? 10 : 12),
         _AddToCartButton(
           product: product,
           isOutOfStock: isOutOfStock,
           ref: ref,
         ),
-        const SizedBox(height: 14),
+        SizedBox(height: isPhone ? 10 : 14),
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
@@ -731,7 +786,7 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
             label: 'VIEW CART',
             textColor: Colors.white,
             onPressed: () {
-              Navigator.pop(context);
+              navigateToCart(context);
             },
           ),
         ),
@@ -794,10 +849,7 @@ class _AddToCartButtonState extends State<_AddToCartButton> {
               label: 'VIEW CART',
               textColor: Colors.white,
               onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const CartScreen()),
-                );
+                navigateToCart(context);
               },
             ),
           ),

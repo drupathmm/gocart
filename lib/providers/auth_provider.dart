@@ -10,3 +10,19 @@ final authUserIdProvider = StreamProvider<String?>((ref) {
       .map((state) => state.session?.user.id)
       .distinct();
 });
+
+/// Resolves merchant restrictions from the persisted profile, never from
+/// client metadata. The dashboard uses this to disable selling tools while
+/// retaining the authenticated session for pending and suspended merchants.
+final merchantStatusProvider = FutureProvider.family<String?, String>((
+  ref,
+  merchantId,
+) async {
+  final profile = await Supabase.instance.client
+      .from('profiles')
+      .select('role, merchant_status')
+      .eq('id', merchantId)
+      .maybeSingle();
+  if (profile == null || profile['role'] != 'merchant') return null;
+  return profile['merchant_status'] as String?;
+});

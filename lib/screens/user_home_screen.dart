@@ -5,12 +5,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/product.dart';
 import '../models/product_category.dart';
+import '../providers/cart_provider.dart';
 import '../providers/product_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/gocart_footer.dart';
+import '../widgets/product_cart_quantity_badge.dart';
 import 'cart_screen.dart';
 import 'product_detail_screen.dart';
 import 'profile_screen.dart';
+import 'user_notifications_screen.dart';
 
 class UserHomeScreen extends ConsumerStatefulWidget {
   const UserHomeScreen({super.key});
@@ -41,7 +44,7 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
     searchTimer?.cancel();
     ref.read(productsProvider.notifier).cancelPendingRequests();
 
-    searchTimer = Timer(const Duration(milliseconds: 450), () {
+    searchTimer = Timer(const Duration(milliseconds: 300), () {
       final query = value.trim();
 
       if (query.isEmpty) {
@@ -207,6 +210,16 @@ class _UserHomeScreenState extends ConsumerState<UserHomeScreen> {
                           ),
                         ],
                       ),
+                    IconButton(
+                      tooltip: 'Notifications',
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const UserNotificationsScreen(),
+                        ),
+                      ),
+                      icon: const Icon(Icons.notifications_none_rounded),
+                    ),
                   ],
                 );
               },
@@ -460,10 +473,15 @@ class _UserProductsPageState extends ConsumerState<_UserProductsPage> {
         loading: () => const _LoadingView(),
         error: (error, stackTrace) => _ErrorView(onRetry: refreshProducts),
         data: (products) {
+          final notifier = ref.read(productsProvider.notifier);
           return _HomeContent(
             products: products,
             selectedCategory: selectedCategory,
             onCategorySelected: selectCategory,
+            hasMoreProducts: notifier.hasMore,
+            isLoadingMore: notifier.isLoadingMore,
+            loadMoreError: notifier.loadMoreError,
+            onLoadMore: notifier.loadMoreProducts,
           );
         },
       ),
@@ -479,11 +497,19 @@ class _HomeContent extends StatelessWidget {
   final List<Product> products;
   final String selectedCategory;
   final ValueChanged<String> onCategorySelected;
+  final bool hasMoreProducts;
+  final bool isLoadingMore;
+  final String? loadMoreError;
+  final Future<void> Function() onLoadMore;
 
   const _HomeContent({
     required this.products,
     required this.selectedCategory,
     required this.onCategorySelected,
+    required this.hasMoreProducts,
+    required this.isLoadingMore,
+    required this.loadMoreError,
+    required this.onLoadMore,
   });
 
   @override
@@ -624,6 +650,24 @@ class _HomeContent extends StatelessWidget {
                   const _EmptyProductsView()
                 else
                   _ProductGrid(products: products),
+
+                if (hasMoreProducts || isLoadingMore || loadMoreError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 18),
+                    child: Center(
+                      child: loadMoreError != null
+                          ? TextButton(
+                              onPressed: onLoadMore,
+                              child: const Text('Could not load more. Retry'),
+                            )
+                          : isLoadingMore
+                          ? const CircularProgressIndicator()
+                          : OutlinedButton(
+                              onPressed: onLoadMore,
+                              child: const Text('Load more products'),
+                            ),
+                    ),
+                  ),
 
                 const SizedBox(height: 50),
               ],
@@ -1135,19 +1179,20 @@ class _ProductGrid extends StatelessWidget {
           columns = 4;
         } else if (width >= 700) {
           columns = 3;
-        } else if (width < 360) {
+        } else if (width < 320) {
           columns = 1;
         } else {
           columns = 2;
         }
 
-        const spacing = 14.0;
+        final isPhone = width < 600;
+        final spacing = isPhone ? 10.0 : 14.0;
 
         final itemWidth = (width - ((columns - 1) * spacing)) / columns;
 
         // Reduced from 0.72.
         // This makes the product cards more compact.
-        final imageHeight = itemWidth * 0.64;
+        final imageHeight = itemWidth * (isPhone ? 0.60 : 0.64);
 
         return GridView.builder(
           shrinkWrap: true,
@@ -1161,12 +1206,13 @@ class _ProductGrid extends StatelessWidget {
             // Reduced from imageHeight + 142.
             // The previous height combined with Spacer()
             // created the large empty area.
-            mainAxisExtent: imageHeight + 112,
+            mainAxisExtent: imageHeight + (isPhone ? 104 : 112),
           ),
           itemBuilder: (context, index) {
             return _ProductCard(
               product: products[index],
               imageHeight: imageHeight,
+              isCompact: isPhone,
             );
           },
         );
@@ -1179,15 +1225,27 @@ class _ProductGrid extends StatelessWidget {
 // PRODUCT CARD
 // ============================================================================
 
-class _ProductCard extends StatelessWidget {
+class _ProductCard extends ConsumerWidget {
   final Product product;
   final double imageHeight;
+  final bool isCompact;
 
-  const _ProductCard({required this.product, required this.imageHeight});
+  const _ProductCard({
+    required this.product,
+    required this.imageHeight,
+    required this.isCompact,
+  });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
+    final cartQuantity = ref.watch(
+      cartProvider.select(
+        (items) => (items.asData?.value ?? const [])
+            .where((item) => item.productId == product.id)
+            .fold<int>(0, (total, item) => total + item.quantity),
+      ),
+    );
 
     final isOutOfStock = product.stock <= 0;
 
@@ -1278,6 +1336,12 @@ class _ProductCard extends StatelessWidget {
                           ),
                         ),
                       ),
+                    if (cartQuantity > 0)
+                      Positioned(
+                        top: 9,
+                        right: 9,
+                        child: ProductCartQuantityBadge(quantity: cartQuantity),
+                      ),
                   ],
                 ),
               ),
@@ -1287,7 +1351,12 @@ class _ProductCard extends StatelessWidget {
               // ==========================================================
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
+                  padding: EdgeInsets.fromLTRB(
+                    isCompact ? 9 : 12,
+                    isCompact ? 8 : 9,
+                    isCompact ? 9 : 12,
+                    isCompact ? 8 : 9,
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

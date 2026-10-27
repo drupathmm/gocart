@@ -1,3 +1,13 @@
+# Local secrets (use --dart-define-from-file=.env)
+.env
+.env.*
+!.env.example
+
+# Supabase CLI-generated local state may contain development credentials.
+/supabase/.branches/
+/supabase/.temp/
+/node_modules/
+
 # Miscellaneous
 *.class
 *.log

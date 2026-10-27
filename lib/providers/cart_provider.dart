@@ -13,6 +13,10 @@ final cartProvider = AsyncNotifierProvider<CartNotifier, List<CartItem>>(
   CartNotifier.new,
 );
 
+int cartQuantityForProduct(Iterable<CartItem> items, int productId) => items
+    .where((item) => item.productId == productId)
+    .fold<int>(0, (total, item) => total + item.quantity);
+
 class CartNotifier extends AsyncNotifier<List<CartItem>> {
   // Keeps track of cart items currently being updated.
   final Set<int> _updatingItemIds = {};

@@ -538,3 +538,157 @@ flutter test test/merchant_status_action_button_test.dart test/merchant_reinstat
 
 The Flutter command was attempted during this review, produced no output for
 over 30 seconds, and was interrupted. No successful test result is claimed.
+
+## Compatibility package update (2026-10-27)
+
+The verified read-only GoCart baseline remains legacy: six orders have the
+`demo` / `demo_paid` states, `order_items.id` remains bigint, the live admin
+RPC remains `admin_set_merchant_status(uuid,text)`, and the migration-history
+result is empty. The previous catalog reported seven non-merchant profiles
+with NULL merchant status. No records were changed.
+
+The local package is a set of reviewed phases, not a historical migration
+replay:
+
+1. **Merchant authorization and registration inbox:** review
+   `20261027110000_repair_merchant_approval_notifications.sql` against the
+   restored catalog and dependencies. It replaces the legacy two-argument
+   status RPC with mandatory `(merchant_id,status,reason)` arguments, records
+   transactional audit rows, and creates deduplicated pending-registration
+   alerts. Pending applications may be approved or rejected; rejection is
+   terminal until the owner defines a resubmission policy. Approval,
+   rejection, and suspension require a non-empty reason.
+2. **Product/cart/demo-checkout security:** review
+   `critical_merchant_security_patch.sql` after phase 1. It follows the legacy
+   bigint product/cart/order-item IDs and legacy `place_demo_order()` shape.
+   Existing demo orders and payment states are preserved; this phase does not
+   create or imply Razorpay payment evidence.
+3. **Reinstatement lifecycle:**
+   `20261027120000_merchant_reinstatement_lifecycle.sql` now expects the
+   helper, restrictive product policy, and trigger-local names from the
+   legacy security draft rather than incompatible historical helper names. It
+   supports pending-to-rejected status and reports rejected counts. It still
+   requires phases 1 and 2.
+4. **Payment/order compatibility bridge:** do not run
+   `20261008000000_server_side_checkout.sql`. Its preflight correctly stops on
+   the existing demo states and inbound `order_items.id` references. A new
+   separately reviewed additive bridge is still required for payment
+   attempts, webhook idempotency, stable legacy IDs, and the current Edge
+   Function RPCs. Keep `buyer_id` and `total`, and preserve the bigint item
+   key, until all database and application consumers have been inventoried.
+5. **Coupons:** the legacy `promotions` table is marketing content, not a
+   coupon contract. Add coupon rules, redemption records, server-side discount
+   calculation, and transactional usage-limit locking in a separate stage;
+   the current coupon logic is coupled to the incompatible 20261008 order
+   rewrite and is not independently deployable.
+6. **User/order/payment notifications:** apply
+   `20261027130000_user_event_notifications.sql` only after lifecycle and
+   payment contracts exist. It now includes merchant rejection events, but
+   depends on modern order/payment fields and capture functions absent from
+   the legacy database.
+
+The repair SQL already required a non-empty reason, but its postflight and
+pgTAP contract incorrectly expected one defaulted argument. They now require
+zero defaults. Regression coverage now includes blank/NULL reasons, pending
+merchant rejection, audit/registration-notification resolution, terminal
+rejection behavior, and the rejected lifecycle count. These SQL tests remain
+unrun because there is no owner-approved restored GoCart baseline.
+
+The admin dashboard now has a reason-required rejection action for pending
+merchants and a separate rejected count/status. This is local implementation
+only; the live database was not changed.
+
+### Release gates
+
+Obtain owner approval for a backup and demonstrated restore, and an explicitly
+identified isolated GoCart restore. Capture its schema and referential
+integrity baseline; run each migration and pgTAP suite in the sequence above
+on that copy; review exact SQL and recovery evidence; then obtain approval for
+the exact production change and deployment method. A failed preflight stops
+the rollout. Recover from the verified backup or contain affected RPC entry
+points; do not delete or rewrite historical orders, payments, carts, stock,
+or audit history as rollback.
+
+## Legacy Razorpay and coupon reconciliation (2026-10-27)
+
+The current read-only catalog check reconfirmed GoCart project
+`jqulrjrpzdozhlxeuefy`. The observed legacy `orders` contract is
+`id uuid`, `buyer_id uuid`, `total numeric`, `status`, `payment_method`, and
+`payment_status`. Its checks currently admit legacy statuses
+`placed/processing/shipped/delivered/cancelled`, payment method `demo`, and
+payment status `demo_paid`. `order_items.id` is bigint and remains the primary
+key; it references UUID `orders.id` and bigint `products.id`. The exact
+migration-history query remains empty. `promotions` is still a marketing
+display table, not a coupon contract.
+
+### Required compatibility decisions
+
+- Keep the legacy columns and values. Do not rename `buyer_id` or `total`;
+  existing Dart order history uses those as fallback, and legacy RPCs still
+  write them. A reviewed bridge may add synchronized `user_id` and
+  `total_amount` aliases only if all old/new writes are made consistent in a
+  database trigger and postflight verifies equality for every order.
+- Widen—not replace with a modern-only set—the order checks. Preserve
+  `demo/demo_paid` and every existing status. New Razorpay orders must be
+  explicitly inserted as `payment_method='razorpay'` with an unpaid state;
+  keep the legacy defaults for demo callers until those callers are retired.
+  A provider capture must be recorded in an attempt ledger and only then
+  permit the paid transition. Never label any existing demo order captured.
+- Leave `orders.id` UUID and `order_items.id` bigint. The legacy order-item
+  primary key is referenced by foreign keys; do not perform the 20261008
+  `id` to `legacy_id` conversion. Existing product IDs remain bigint too.
+- The current Edge Functions require a larger RPC contract than adding
+  columns: checkout cache/place-order, recoverable Razorpay order claim/cache/
+  completion/dispatch/recovery, verification claims and response cache,
+  verified-payment recording, webhook event claim/finish, and payment
+  reconciliation claim/finish/capture. Each must be created against the
+  legacy aliases and exact state constraints before its Edge Function can be
+  considered compatible.
+- Coupons must use a new rules table (`offers` contract) plus redemptions,
+  separate from `promotions`. Checkout must lock a coupon row before checking
+  global and per-user limits, calculate percentage/fixed discounts from the
+  locked server subtotal, apply rounding and `max_discount`, reject a result
+  above subtotal, then persist order, reservation, redemption, and idempotency
+  response in one transaction. Failure must roll all those changes back.
+
+### Safe forward-only package order
+
+1. Restore a verified owner-approved GoCart backup; capture exact catalog,
+   status constraints, order/item identifiers and FKs, row totals, and legacy
+   payment-state aggregates.
+2. Apply/test the already separated merchant authorization and product
+   security phases on that copy. Do not let payment work reintroduce client
+   profile writes or bypass merchant locks.
+3. Author a **new legacy bridge** as a separate draft. It must preflight the
+   exact legacy schema, add dual order aliases without removing old columns,
+   widen checks while preserving all legacy values/defaults, and leave
+   `order_items.id` untouched. Abort if any name/type/check/FK differs.
+4. Add coupon, idempotency, inventory reservation, payment-attempt, and webhook
+   ledgers with RLS and service-only RPCs. Implement a single legacy checkout
+   reservation operation and the Edge Function RPCs listed above against that
+   schema. Use a unique order/item payment association, lock order then
+   attempt, and make every retry return the prior result or a review state.
+5. Install capture guards and notification hooks only after verified capture
+   state and the final order columns are established. Then run the SQL suites
+   and Edge tests together on the restored copy.
+
+Do not run `20261008000000_server_side_checkout.sql` as a way to supply those
+objects: it renames legacy columns, narrows totals, changes identifiers and
+has a deliberate preflight that blocks the existing `demo/demo_paid` values.
+Do not mark it applied or remove that preflight. No executable payment/coupon
+bridge was created in this change because its full RPC and reservation graph
+cannot be validated without an approved restored baseline.
+
+### Regression coverage status
+
+The existing mocked Edge tests cover valid/invalid checkout signatures, raw
+body webhook signatures, duplicate delivery, verification claims, retries,
+provider mismatches, and recovery decisions. Existing database suites include
+`payment_state.test.sql`, `payment_integrity_recovery.test.sql`,
+`checkout_reservation_lifecycle.test.sql`, and
+`webhook_event_processing.test.sql`. The checkout reservation suite now also
+checks that a percentage coupon calculates a server total of 36.00 for a 40.00
+subtotal and that a fixed discount above subtotal rolls back the order,
+reservation, stock, cart, quota, and redemption. The SQL suite still targets
+the newer schema and has not been executed against the legacy live database or
+an approved restored copy.

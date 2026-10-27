@@ -2,15 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'config/env.dart';
 import 'screens/splash_screen.dart';
 import 'theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  AppEnv.validate();
 
   await Supabase.initialize(
-    url: 'https://jqulrjrpzdozhlxeuefy.supabase.co',
-    publishableKey: 'sb_publishable_MDfR5Mz2uj7z2xznsVrvWA_qrEtUx6F',
+    url: AppEnv.supabaseUrl,
+    publishableKey: AppEnv.supabaseAnonKey,
   );
 
   runApp(const ProviderScope(child: GoCartApp()));

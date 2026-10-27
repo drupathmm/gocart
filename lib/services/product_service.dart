@@ -13,6 +13,12 @@ class ProductService {
 
   static const String _bucketName = 'product-images';
   static const int _maxImageSizeBytes = 5 * 1024 * 1024;
+  static const int _maxSearchLength = 100;
+
+  /// Quotes values interpolated into PostgREST's raw `.or()` filter syntax.
+  /// Reserved filter characters must remain data, not become new conditions.
+  static String quotePostgrestValue(String value) =>
+      '"${value.replaceAll(r'\', r'\\').replaceAll('"', r'\"')}"';
 
   // ============================================================
   // GOCART PRODUCT CATEGORIES
@@ -31,11 +37,12 @@ class ProductService {
   // Get all products
   // --------------------------------------------------
 
-  Future<List<Product>> getAllProducts() async {
+  Future<List<Product>> getAllProducts({int offset = 0, int limit = 24}) async {
     final response = await _supabase
         .from('products')
         .select()
-        .order('created_at', ascending: false);
+        .order('created_at', ascending: false)
+        .range(offset, offset + limit - 1);
 
     return _mapProducts(response);
   }
@@ -330,6 +337,7 @@ class ProductService {
     final user = _supabase.auth.currentUser!;
 
     String? imageUrl;
+    int? createdProductId;
 
     try {
       // Upload image first.
@@ -337,7 +345,7 @@ class ProductService {
         imageUrl = await _uploadProductImage(imageFile);
       }
 
-      final response = await _supabase
+      final inserted = await _supabase
           .from('products')
           .insert({
             'merchant_id': user.id,
@@ -349,15 +357,36 @@ class ProductService {
             // Keep the old column synchronized during migration.
             'price': offerPrice,
 
-            'stock': stock,
             'category': category.trim(),
             'image_url': imageUrl,
           })
           .select()
           .single();
+      createdProductId = (inserted['id'] as num).toInt();
+
+      // Stock is changed only through the server-side stock RPC. The table
+      // insert grant deliberately excludes the products.stock column.
+      await _supabase.rpc(
+        'merchant_set_product_stock',
+        params: {'p_product_id': createdProductId, 'p_stock': stock},
+      );
+
+      final response = await _supabase
+          .from('products')
+          .select()
+          .eq('id', createdProductId)
+          .single();
 
       return Product.fromMap(response);
     } catch (error) {
+      if (createdProductId != null) {
+        try {
+          await _supabase.from('products').delete().eq('id', createdProductId);
+        } catch (_) {
+          // Preserve the original creation error.
+        }
+      }
+
       // If database insertion fails after image upload,
       // clean up the uploaded image.
       if (imageUrl != null) {
@@ -415,7 +444,7 @@ class ProductService {
         finalImageUrl = null;
       }
 
-      final response = await _supabase
+      await _supabase
           .from('products')
           .update({
             'name': name.trim(),
@@ -426,13 +455,21 @@ class ProductService {
             // Keep the old column synchronized during migration.
             'price': offerPrice,
 
-            'stock': stock,
             'category': category.trim(),
             'image_url': finalImageUrl,
             'updated_at': DateTime.now().toIso8601String(),
           })
-          .eq('id', productId)
+          .eq('id', productId);
+
+      await _supabase.rpc(
+        'merchant_set_product_stock',
+        params: {'p_product_id': productId, 'p_stock': stock},
+      );
+
+      final response = await _supabase
+          .from('products')
           .select()
+          .eq('id', productId)
           .single();
 
       // Remove the old image only after the database update
@@ -480,20 +517,30 @@ class ProductService {
   // Search products
   // --------------------------------------------------
 
-  Future<List<Product>> searchProducts(String searchText) async {
+  Future<List<Product>> searchProducts(
+    String searchText, {
+    int offset = 0,
+    int limit = 24,
+  }) async {
     final query = searchText.trim();
 
     if (query.isEmpty) {
-      return getAllProducts();
+      return getAllProducts(offset: offset, limit: limit);
     }
+    if (query.length > _maxSearchLength) {
+      throw const FormatException('Search text is too long.');
+    }
+
+    final pattern = quotePostgrestValue('%$query%');
 
     final response = await _supabase
         .from('products')
         .select()
         .or(
-          'name.ilike.%$query%,description.ilike.%$query%,category.ilike.%$query%',
+          'name.ilike.$pattern,description.ilike.$pattern,category.ilike.$pattern',
         )
-        .order('created_at', ascending: false);
+        .order('created_at', ascending: false)
+        .range(offset, offset + limit - 1);
 
     return _mapProducts(response);
   }
@@ -502,11 +549,15 @@ class ProductService {
   // Get products by category
   // --------------------------------------------------
 
-  Future<List<Product>> getProductsByCategory(String category) async {
+  Future<List<Product>> getProductsByCategory(
+    String category, {
+    int offset = 0,
+    int limit = 24,
+  }) async {
     final normalizedCategory = category.trim();
 
     if (normalizedCategory.isEmpty || normalizedCategory == 'All') {
-      return getAllProducts();
+      return getAllProducts(offset: offset, limit: limit);
     }
 
     // Category filtering uses the same canonical category names
@@ -519,7 +570,8 @@ class ProductService {
         .from('products')
         .select()
         .eq('category', normalizedCategory)
-        .order('created_at', ascending: false);
+        .order('created_at', ascending: false)
+        .range(offset, offset + limit - 1);
 
     return _mapProducts(response);
   }

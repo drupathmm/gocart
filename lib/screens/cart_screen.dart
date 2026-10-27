@@ -352,7 +352,7 @@ class _CheckoutNote extends StatelessWidget {
         const SizedBox(width: 7),
         Flexible(
           child: Text(
-            'Demo checkout only · no real payment will be taken',
+            'Prices and stock are checked on the server. Razorpay test payments are supported in the Android and iOS apps.',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -420,7 +420,9 @@ class _CartItemCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _ProductImage(imageUrl: product.imageUrl),
-                    const SizedBox(width: 14),
+                    SizedBox(
+                      width: MediaQuery.sizeOf(context).width < 600 ? 11 : 14,
+                    ),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -566,16 +568,22 @@ class _ProductImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final placeholderColor = const Color(0xFFF4EBE7);
+    final isPhone = MediaQuery.sizeOf(context).width < 600;
+    final imageSize = isPhone ? 78.0 : 96.0;
 
     if (imageUrl == null || imageUrl!.trim().isEmpty) {
       return Container(
-        width: 96,
-        height: 96,
+        width: imageSize,
+        height: imageSize,
         decoration: BoxDecoration(
           color: placeholderColor,
           borderRadius: BorderRadius.circular(15),
         ),
-        child: const Icon(Icons.image_outlined, size: 36, color: Colors.grey),
+        child: Icon(
+          Icons.image_outlined,
+          size: isPhone ? 30 : 36,
+          color: Colors.grey,
+        ),
       );
     }
 
@@ -583,17 +591,17 @@ class _ProductImage extends StatelessWidget {
       borderRadius: BorderRadius.circular(15),
       child: Image.network(
         imageUrl!,
-        width: 96,
-        height: 96,
+        width: imageSize,
+        height: imageSize,
         fit: BoxFit.cover,
         errorBuilder: (context, error, stackTrace) {
           return Container(
-            width: 96,
-            height: 96,
+            width: imageSize,
+            height: imageSize,
             color: placeholderColor,
-            child: const Icon(
+            child: Icon(
               Icons.broken_image_outlined,
-              size: 34,
+              size: isPhone ? 29 : 34,
               color: Colors.grey,
             ),
           );

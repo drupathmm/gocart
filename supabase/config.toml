@@ -1,0 +1,36 @@
+project_id = "gocart"
+
+[api]
+port = 54421
+
+[db]
+port = 54422
+shadow_port = 54420
+
+[studio]
+port = 54423
+
+[local_smtp]
+enabled = true
+port = 54424
+
+[analytics]
+port = 54427
+
+[functions.checkout]
+verify_jwt = true
+
+[functions.verify-payment]
+verify_jwt = true
+
+[functions.create-razorpay-order]
+verify_jwt = true
+
+[functions.razorpay-webhook]
+verify_jwt = false
+
+[functions.reap-checkout-reservations]
+verify_jwt = true
+
+[functions.reconcile-razorpay-payment]
+verify_jwt = true

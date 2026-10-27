@@ -35,8 +35,14 @@ jobs:
       - name: Analyze project
         run: flutter analyze
 
+      - name: Run Flutter tests
+        run: flutter test --no-pub
+
       - name: Build Flutter Web
-        run: flutter build web --release --base-href /gocart/
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: flutter build web --release --base-href /gocart/ --dart-define=SUPABASE_URL=$SUPABASE_URL --dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
 
       - name: Upload web build
         uses: actions/upload-pages-artifact@v4

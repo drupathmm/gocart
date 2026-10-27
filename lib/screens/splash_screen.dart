@@ -76,7 +76,7 @@ class _SplashScreenState extends State<SplashScreen> {
       // ------------------------------------------------------------
       final profile = await supabase
           .from('profiles')
-          .select('role, merchant_status')
+          .select('role')
           .eq('id', user.id)
           .maybeSingle();
 
@@ -99,8 +99,6 @@ class _SplashScreenState extends State<SplashScreen> {
       }
 
       final role = profile['role'] as String?;
-      final merchantStatus =
-          profile['merchant_status'] as String? ?? 'approved';
 
       // ------------------------------------------------------------
       // ADMIN
@@ -114,18 +112,6 @@ class _SplashScreenState extends State<SplashScreen> {
       // MERCHANT
       // ------------------------------------------------------------
       if (role == 'merchant') {
-        // A suspended merchant should not enter the dashboard.
-        if (merchantStatus == 'suspended') {
-          await supabase.auth.signOut();
-
-          if (!mounted) {
-            return;
-          }
-
-          _showSuspendedMessage();
-          return;
-        }
-
         _openMerchantDashboard();
         return;
       }
@@ -216,18 +202,6 @@ class _SplashScreenState extends State<SplashScreen> {
   // ==========================================================================
   // SUSPENDED MERCHANT
   // ==========================================================================
-
-  void _showSuspendedMessage() {
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _isLoading = false;
-      _errorMessage =
-          'This merchant account has been suspended by the administrator.';
-    });
-  }
 
   // ==========================================================================
   // RETRY

@@ -1,11 +1,8 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../widgets/gocart_logo.dart';
 import 'login_screen.dart';
-import 'merchant_dashboard_screen.dart';
 import 'user_home_screen.dart';
 
 class SignupScreen extends StatefulWidget {
@@ -106,7 +103,9 @@ class _SignupScreenState extends State<SignupScreen> {
       // MERCHANT SIGNUP
       // ================================================================
       if (selectedRole == 'merchant') {
-        await _waitForMerchantApproval();
+        setState(() {
+          isMerchantPending = true;
+        });
         return;
       }
 
@@ -159,79 +158,21 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   // ==========================================================================
-  // MERCHANT AUTO APPROVAL
+  // RETURN FROM MERCHANT REVIEW STATUS
   // ==========================================================================
 
-  Future<void> _waitForMerchantApproval() async {
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      isMerchantPending = true;
-    });
-
-    // Give the user a clear pending state for 5 seconds.
-    await Future<void>.delayed(const Duration(seconds: 5));
-
-    if (!mounted) {
-      return;
-    }
-
-    bool approved = false;
-
-    // The database itself checks that at least 5 seconds have passed.
-    // We retry a couple of times to handle tiny timing differences.
-    for (int attempt = 0; attempt < 3; attempt++) {
-      try {
-        final result = await Supabase.instance.client.rpc(
-          'approve_my_merchant_account',
-        );
-
-        approved = result == true;
-
-        if (approved) {
-          break;
-        }
-
-        if (attempt < 2) {
-          await Future<void>.delayed(const Duration(milliseconds: 500));
-        }
-      } catch (_) {
-        if (attempt < 2) {
-          await Future<void>.delayed(const Duration(milliseconds: 500));
-        }
-      }
-    }
-
-    if (!mounted) {
-      return;
-    }
-
-    if (!approved) {
-      setState(() {
-        isMerchantPending = false;
-        isLoading = false;
-      });
-
-      _showMessage(
-        'Your merchant account is still being prepared. Please sign in again in a moment.',
-        isError: true,
-      );
-
-      return;
-    }
-
-    // Refresh the current session/profile state before navigating.
-    await Supabase.instance.client.auth.refreshSession();
-
-    if (!mounted) {
-      return;
-    }
-
+  Future<void> _returnToLoginAfterMerchantSignup() async {
+    await Supabase.instance.client.auth.signOut();
+    if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(builder: (context) => const MerchantDashboardScreen()),
+      MaterialPageRoute(
+        builder: (_) => const LoginScreen(
+          initialMessage:
+              'Your merchant account is awaiting admin approval. '
+              'Sign in again after it has been approved.',
+        ),
+      ),
       (route) => false,
     );
   }
@@ -841,7 +782,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     const SizedBox(height: 24),
 
                     const Text(
-                      'Setting up your merchant account',
+                      'Your merchant account is awaiting review',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 23,
@@ -853,8 +794,9 @@ class _SignupScreenState extends State<SignupScreen> {
                     const SizedBox(height: 10),
 
                     Text(
-                      'Your merchant account is being prepared. '
-                      'This will only take a few seconds.',
+                      'An administrator must review and approve your merchant '
+                      'account. You can sign in and open the merchant dashboard '
+                      'after approval.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 14,
@@ -865,19 +807,8 @@ class _SignupScreenState extends State<SignupScreen> {
 
                     const SizedBox(height: 28),
 
-                    const SizedBox(
-                      width: 30,
-                      height: 30,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 3,
-                        color: Color(0xFF541B3D),
-                      ),
-                    ),
-
-                    const SizedBox(height: 18),
-
                     Text(
-                      'Please wait...',
+                      'Status: Pending admin approval',
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -908,7 +839,8 @@ class _SignupScreenState extends State<SignupScreen> {
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              'Your account is being securely prepared.',
+                              'Only an administrator can approve this account. '
+                              'You cannot approve yourself.',
                               style: TextStyle(
                                 fontSize: 12,
                                 height: 1.4,
@@ -917,6 +849,22 @@ class _SignupScreenState extends State<SignupScreen> {
                             ),
                           ),
                         ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: _returnToLoginAfterMerchantSignup,
+                        icon: const Icon(Icons.login_rounded),
+                        label: const Text('Return to sign in'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF541B3D),
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size.fromHeight(48),
+                        ),
                       ),
                     ),
                   ],

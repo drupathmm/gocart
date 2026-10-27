@@ -5,13 +5,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/product.dart';
+import '../models/merchant_analytics.dart';
+import '../models/merchant_reinstatement_request.dart';
 import '../providers/auth_provider.dart';
+import '../providers/merchant_analytics_provider.dart';
 import '../providers/product_provider.dart';
+import '../services/merchant_reinstatement_service.dart';
 import '../theme/app_theme.dart';
 import 'add_product_screen.dart';
 import 'edit_product_screen.dart';
 import 'login_screen.dart';
 import 'profile_screen.dart';
+import 'user_notifications_screen.dart';
 
 class MerchantDashboardScreen extends ConsumerWidget {
   const MerchantDashboardScreen({super.key});
@@ -45,6 +50,43 @@ class MerchantDashboardScreen extends ConsumerWidget {
       );
     }
 
+    final merchantStatus = ref.watch(merchantStatusProvider(merchantId));
+    if (merchantStatus.isLoading) {
+      return const Scaffold(
+        backgroundColor: GoCartTheme.canvas,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (merchantStatus.hasError) {
+      return Scaffold(
+        backgroundColor: GoCartTheme.canvas,
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('We could not verify your merchant account status.'),
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: () =>
+                    ref.invalidate(merchantStatusProvider(merchantId)),
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    final status = merchantStatus.asData?.value;
+    if (status != 'approved') {
+      return _MerchantRestrictedScreen(
+        status: status,
+        onRefreshStatus: () =>
+            ref.invalidate(merchantStatusProvider(merchantId)),
+        onOpenProfile: () => _openProfile(context),
+        onOpenNotifications: () => _openNotifications(context),
+      );
+    }
+
     final merchantProductsProvider = myProductsProvider(merchantId);
     final productsAsync = ref.watch(merchantProductsProvider);
     final isDesktop = MediaQuery.sizeOf(context).width >= 1000;
@@ -62,6 +104,11 @@ class MerchantDashboardScreen extends ConsumerWidget {
               title: const _MerchantTopBar(),
               actions: [
                 IconButton(
+                  tooltip: 'Notifications',
+                  onPressed: () => _openNotifications(context),
+                  icon: const Icon(Icons.notifications_none_rounded),
+                ),
+                IconButton(
                   tooltip: 'Profile',
                   onPressed: () => _openProfile(context),
                   icon: const Icon(Icons.account_circle_outlined, size: 27),
@@ -73,6 +120,8 @@ class MerchantDashboardScreen extends ConsumerWidget {
         color: _GoCartColors.primary,
         backgroundColor: Colors.white,
         onRefresh: () async {
+          ref.invalidate(merchantStatusProvider(merchantId));
+          ref.invalidate(merchantAnalyticsProvider(merchantId));
           await ref.read(merchantProductsProvider.notifier).refreshProducts();
         },
         child: productsAsync.when(
@@ -85,6 +134,7 @@ class MerchantDashboardScreen extends ConsumerWidget {
           data: (products) {
             return _DashboardContent(
               products: products,
+              merchantId: merchantId,
               onAddProduct: () async {
                 await Navigator.push(
                   context,
@@ -122,6 +172,7 @@ class MerchantDashboardScreen extends ConsumerWidget {
                 await _deleteProduct(context, ref, product);
               },
               onOpenProfile: () => _openProfile(context),
+              onOpenNotifications: () => _openNotifications(context),
             );
           },
         ),
@@ -133,6 +184,13 @@ class MerchantDashboardScreen extends ConsumerWidget {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const ProfileScreen()),
+    );
+  }
+
+  void _openNotifications(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const UserNotificationsScreen()),
     );
   }
 
@@ -207,6 +265,259 @@ class MerchantDashboardScreen extends ConsumerWidget {
         ),
       );
     }
+  }
+}
+
+class _MerchantRestrictedScreen extends StatefulWidget {
+  const _MerchantRestrictedScreen({
+    required this.status,
+    required this.onRefreshStatus,
+    required this.onOpenProfile,
+    required this.onOpenNotifications,
+  });
+
+  final String? status;
+  final VoidCallback onRefreshStatus;
+  final VoidCallback onOpenProfile;
+  final VoidCallback onOpenNotifications;
+
+  @override
+  State<_MerchantRestrictedScreen> createState() =>
+      _MerchantRestrictedScreenState();
+}
+
+class _MerchantRestrictedScreenState extends State<_MerchantRestrictedScreen> {
+  final _messageController = TextEditingController();
+  final _service = MerchantReinstatementService();
+  MerchantReinstatementRequest? _request;
+  bool _loadingRequest = false;
+  bool _submittingRequest = false;
+  String? _requestError;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.status == 'suspended') _loadRequest();
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadRequest() async {
+    setState(() {
+      _loadingRequest = true;
+      _requestError = null;
+    });
+    try {
+      final request = await _service.getLatestRequest();
+      if (!mounted) return;
+      setState(() {
+        _request = request;
+        _loadingRequest = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _requestError = 'Account review is temporarily unavailable.';
+        _loadingRequest = false;
+      });
+    }
+  }
+
+  Future<void> _submitRequest() async {
+    if (_submittingRequest) return;
+    setState(() => _submittingRequest = true);
+    try {
+      final request = await _service.submitRequest(_messageController.text);
+      if (!mounted) return;
+      setState(() {
+        _request = request;
+        _messageController.clear();
+        _submittingRequest = false;
+        _requestError = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Your account review request was submitted.'),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _submittingRequest = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not submit the review request. Please retry.'),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final status = widget.status;
+    final isSuspended = status == 'suspended';
+    final title = isSuspended
+        ? 'Merchant account suspended'
+        : status == 'pending'
+        ? 'Merchant account awaiting approval'
+        : 'Merchant account unavailable';
+    final message = isSuspended
+        ? 'Your account remains signed in. Your products are hidden from customers and cannot be purchased while the account is suspended. You can request an account review below.'
+        : status == 'pending'
+        ? 'Your account remains signed in. Selling tools will be available after an administrator approves your registration.'
+        : 'We could not confirm that this account is an active merchant. Contact GoCart support.';
+
+    return Scaffold(
+      backgroundColor: GoCartTheme.canvas,
+      appBar: AppBar(
+        title: const Text('Merchant account'),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh account status',
+            onPressed: widget.onRefreshStatus,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+          IconButton(
+            tooltip: 'Profile',
+            onPressed: widget.onOpenProfile,
+            icon: const Icon(Icons.account_circle_outlined),
+          ),
+          IconButton(
+            tooltip: 'Notifications',
+            onPressed: widget.onOpenNotifications,
+            icon: const Icon(Icons.notifications_none_rounded),
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(28),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        isSuspended
+                            ? Icons.store_mall_directory_outlined
+                            : Icons.hourglass_top_rounded,
+                        size: 48,
+                        color: isSuspended
+                            ? Colors.red.shade700
+                            : const Color(0xFF541B3D),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        title,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(message, textAlign: TextAlign.center),
+                      const SizedBox(height: 16),
+                      OutlinedButton.icon(
+                        onPressed: widget.onOpenProfile,
+                        icon: const Icon(Icons.person_outline),
+                        label: const Text('Open profile'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          if (isSuspended) ...[
+            const SizedBox(height: 20),
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 800),
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(22),
+                    child: _buildReinstatementSection(context),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReinstatementSection(BuildContext context) {
+    if (_loadingRequest) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final request = _request;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Request account review',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Explain what has changed or how the issue has been resolved. Submitting a request does not restore your account.',
+        ),
+        if (_requestError != null) ...[
+          const SizedBox(height: 8),
+          Text(_requestError!, style: TextStyle(color: Colors.red.shade700)),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: _loadRequest,
+              child: const Text('Retry'),
+            ),
+          ),
+        ],
+        if (request != null) ...[
+          const SizedBox(height: 14),
+          Text('Latest request: ${request.status.toUpperCase()}'),
+          const SizedBox(height: 4),
+          Text(request.message),
+          if (request.resolutionReason != null) ...[
+            const SizedBox(height: 4),
+            Text('Admin response: ${request.resolutionReason}'),
+          ],
+        ],
+        if (request?.isOpen != true) ...[
+          const SizedBox(height: 14),
+          TextField(
+            controller: _messageController,
+            minLines: 3,
+            maxLines: 6,
+            maxLength: 2000,
+            decoration: const InputDecoration(
+              labelText: 'Message to the GoCart review team',
+              alignLabelWithHint: true,
+              border: OutlineInputBorder(),
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: _submittingRequest ? null : _submitRequest,
+              icon: _submittingRequest
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.rate_review_outlined),
+              label: const Text('Request review'),
+            ),
+          ),
+        ],
+      ],
+    );
   }
 }
 
@@ -292,8 +603,12 @@ class _MerchantTopBar extends StatelessWidget {
 
 class _MerchantDesktopTopBar extends StatelessWidget {
   final VoidCallback onOpenProfile;
+  final VoidCallback onOpenNotifications;
 
-  const _MerchantDesktopTopBar({required this.onOpenProfile});
+  const _MerchantDesktopTopBar({
+    required this.onOpenProfile,
+    required this.onOpenNotifications,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -327,6 +642,11 @@ class _MerchantDesktopTopBar extends StatelessWidget {
             ],
           ),
           const Spacer(),
+          IconButton(
+            tooltip: 'Notifications',
+            onPressed: onOpenNotifications,
+            icon: const Icon(Icons.notifications_none_rounded),
+          ),
           TextButton.icon(
             onPressed: onOpenProfile,
             style: TextButton.styleFrom(
@@ -661,17 +981,21 @@ class _MerchantNavItem extends StatelessWidget {
 
 class _DashboardContent extends StatefulWidget {
   final List<Product> products;
+  final String merchantId;
   final VoidCallback onAddProduct;
   final Future<void> Function(Product product) onEditProduct;
   final Future<void> Function(Product product) onDeleteProduct;
   final VoidCallback onOpenProfile;
+  final VoidCallback onOpenNotifications;
 
   const _DashboardContent({
     required this.products,
+    required this.merchantId,
     required this.onAddProduct,
     required this.onEditProduct,
     required this.onDeleteProduct,
     required this.onOpenProfile,
+    required this.onOpenNotifications,
   });
 
   @override
@@ -887,7 +1211,7 @@ class _DashboardContentState extends State<_DashboardContent> {
                 // ==========================================================
                 // SALES ANALYTICS
                 // ==========================================================
-                const _SalesAnalyticsCard(),
+                _SalesAnalyticsCard(merchantId: widget.merchantId),
 
                 const SizedBox(height: 28),
 
@@ -1034,7 +1358,10 @@ class _DashboardContentState extends State<_DashboardContent> {
             Expanded(
               child: Column(
                 children: [
-                  _MerchantDesktopTopBar(onOpenProfile: widget.onOpenProfile),
+                  _MerchantDesktopTopBar(
+                    onOpenProfile: widget.onOpenProfile,
+                    onOpenNotifications: widget.onOpenNotifications,
+                  ),
                   Expanded(child: dashboardContent),
                 ],
               ),
@@ -2175,12 +2502,16 @@ class _ChartEmptyState extends StatelessWidget {
 // SALES ANALYTICS
 // ============================================================================
 
-class _SalesAnalyticsCard extends StatelessWidget {
-  const _SalesAnalyticsCard();
+class _SalesAnalyticsCard extends ConsumerWidget {
+  const _SalesAnalyticsCard({required this.merchantId});
+
+  final String merchantId;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final analytics = ref.watch(merchantAnalyticsProvider(merchantId));
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
@@ -2191,66 +2522,205 @@ class _SalesAnalyticsCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: const Color(0xFFEADDD5)),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: _GoCartColors.primary,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(
-              Icons.trending_up_rounded,
-              color: Colors.white,
-              size: 24,
-            ),
+      child: analytics.when(
+        loading: () => const Center(
+          child: Padding(
+            padding: EdgeInsets.all(18),
+            child: CircularProgressIndicator(),
           ),
-          const SizedBox(width: 14),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Sales Analytics',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: _GoCartColors.text,
-                  ),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'Sales graphs will become available once orders and completed purchases are connected to the dashboard.',
-                  style: TextStyle(
-                    fontSize: 11,
-                    height: 1.45,
-                    color: _GoCartColors.muted,
-                  ),
-                ),
-              ],
+        ),
+        error: (error, stackTrace) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Sales analytics unavailable',
+              style: TextStyle(fontWeight: FontWeight.w800),
             ),
-          ),
-          const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(9),
+            const SizedBox(height: 6),
+            const Text(
+              'The secure analytics database function may need to be installed. Retry after the administrator applies the reviewed migration.',
+              style: TextStyle(fontSize: 12, color: _GoCartColors.muted),
             ),
-            child: const Text(
-              'Coming next',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: _GoCartColors.primary,
-              ),
+            TextButton.icon(
+              onPressed: () =>
+                  ref.invalidate(merchantAnalyticsProvider(merchantId)),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
             ),
-          ),
-        ],
+          ],
+        ),
+        data: (value) => _buildAnalytics(value),
       ),
     );
   }
+
+  Widget _buildAnalytics(MerchantAnalytics analytics) {
+    final maxTrend = analytics.salesTrend.fold<double>(
+      0,
+      (maxValue, point) => math.max(maxValue, point.amount),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.trending_up_rounded, color: _GoCartColors.primary),
+            const SizedBox(width: 9),
+            const Expanded(
+              child: Text(
+                'Sales Analytics',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+              ),
+            ),
+            if (analytics.isEmpty)
+              const Text(
+                'No eligible paid orders yet',
+                style: TextStyle(fontSize: 11),
+              ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            _AnalyticsMetric(
+              label: 'Paid item sales',
+              value: '₹${analytics.paidItemSales.toStringAsFixed(2)}',
+            ),
+            _AnalyticsMetric(
+              label: 'Eligible orders',
+              value: '${analytics.totalOrders}',
+            ),
+            _AnalyticsMetric(
+              label: 'Awaiting fulfillment',
+              value: '${analytics.pendingOrders}',
+            ),
+            _AnalyticsMetric(
+              label: 'Delivered',
+              value: '${analytics.completedOrders}',
+            ),
+          ],
+        ),
+        if (analytics.salesTrend.isNotEmpty) ...[
+          const SizedBox(height: 18),
+          const Text(
+            'Daily paid item sales · last 7 days',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          ...analytics.salesTrend.map((point) {
+            final date = point.date.toIso8601String();
+            final ratio = maxTrend <= 0 ? 0.0 : point.amount / maxTrend;
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 52,
+                    child: Text(
+                      date.substring(5, 10),
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  ),
+                  Expanded(
+                    child: LinearProgressIndicator(
+                      value: ratio,
+                      minHeight: 7,
+                      borderRadius: BorderRadius.circular(8),
+                      color: _GoCartColors.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 9),
+                  SizedBox(
+                    width: 74,
+                    child: Text(
+                      '₹${point.amount.toStringAsFixed(0)}',
+                      textAlign: TextAlign.end,
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+        if (analytics.topProducts.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          const Text(
+            'Top-selling products',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          ...analytics.topProducts.map(
+            (product) => ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                product.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text('${product.quantity} sold'),
+              trailing: Text('₹${product.sales.toStringAsFixed(2)}'),
+            ),
+          ),
+        ],
+        if (analytics.recentOrders.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          const Text(
+            'Recent orders',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          ...analytics.recentOrders
+              .take(5)
+              .map(
+                (order) => ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    'Order ${order.id.length > 8 ? order.id.substring(0, 8) : order.id} · ${order.status.replaceAll('_', ' ')}',
+                  ),
+                  subtitle: Text('${order.itemQuantity} items'),
+                  trailing: Text('₹${order.paidItemSales.toStringAsFixed(2)}'),
+                ),
+              ),
+        ],
+        const SizedBox(height: 6),
+        const Text(
+          'Sales include only paid, active orders and use this store’s item subtotals. Order-level coupon discounts are not allocated between merchants.',
+          style: TextStyle(fontSize: 10, color: _GoCartColors.muted),
+        ),
+      ],
+    );
+  }
+}
+
+class _AnalyticsMetric extends StatelessWidget {
+  const _AnalyticsMetric({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(minWidth: 132),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(value, style: const TextStyle(fontWeight: FontWeight.w800)),
+        const SizedBox(height: 3),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 10, color: _GoCartColors.muted),
+        ),
+      ],
+    ),
+  );
 }
 
 // ============================================================================

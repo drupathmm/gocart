@@ -98,7 +98,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       var profile = await supabase
           .from('profiles')
-          .select('role, merchant_status')
+          .select('role')
           .eq('id', user.id)
           .maybeSingle();
 
@@ -126,12 +126,11 @@ class _LoginScreenState extends State<LoginScreen> {
               'email': user.email ?? '',
               'role': requestedRole,
             })
-            .select('role, merchant_status')
+            .select('role')
             .single();
       }
 
       final role = profile['role'] as String?;
-      final merchantStatus = profile['merchant_status'] as String?;
 
       // ----------------------------------------------------------
       // Validate role
@@ -145,19 +144,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
         throw Exception(
           'Your account has an invalid role. '
-          'Please contact support.',
-        );
-      }
-
-      // ----------------------------------------------------------
-      // Suspended merchant protection
-      // ----------------------------------------------------------
-
-      if (role == 'merchant' && merchantStatus == 'suspended') {
-        await supabase.auth.signOut();
-
-        throw Exception(
-          'Your merchant account has been suspended. '
           'Please contact support.',
         );
       }

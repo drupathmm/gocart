@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -8,6 +9,7 @@ import '../providers/order_provider.dart';
 import '../theme/app_theme.dart';
 import 'login_screen.dart';
 import 'user_home_screen.dart';
+import 'razorpay_payment_screen.dart';
 
 class OrderHistoryScreen extends ConsumerWidget {
   const OrderHistoryScreen({super.key});
@@ -57,7 +59,7 @@ class OrderHistoryScreen extends ConsumerWidget {
             ? _OrdersMessage(
                 icon: Icons.receipt_long_outlined,
                 title: 'No orders yet',
-                message: 'Demo orders you place will appear here.',
+                message: 'Orders you place will appear here.',
                 action: FilledButton.tonal(
                   onPressed: () => Navigator.pushAndRemoveUntil(
                     context,
@@ -71,21 +73,39 @@ class OrderHistoryScreen extends ConsumerWidget {
                 color: GoCartTheme.brand,
                 onRefresh: () async =>
                     ref.invalidate(myOrdersProvider(buyerId)),
-                child: ListView(
+                child: ListView.builder(
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(18, 18, 18, 32),
-                  children: [
-                    Center(
+                  itemCount: items.length,
+                  itemBuilder: (context, index) {
+                    final order = items[index];
+                    return Center(
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 900),
-                        child: Column(
-                          children: [
-                            for (final order in items) _OrderCard(order: order),
-                          ],
+                        child: _OrderCard(
+                          order: order,
+                          canResumePayment:
+                              !kIsWeb &&
+                              (defaultTargetPlatform ==
+                                      TargetPlatform.android ||
+                                  defaultTargetPlatform ==
+                                      TargetPlatform.iOS) &&
+                              order.status == 'pending' &&
+                              order.paymentStatus == 'unpaid',
+                          onResumePayment: () async {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    RazorpayPaymentScreen(orderId: order.id),
+                              ),
+                            );
+                            ref.invalidate(myOrdersProvider(buyerId));
+                          },
                         ),
                       ),
-                    ),
-                  ],
+                    );
+                  },
                 ),
               ),
       ),
@@ -95,8 +115,39 @@ class OrderHistoryScreen extends ConsumerWidget {
 
 class _OrderCard extends StatelessWidget {
   final DemoOrder order;
+  final bool canResumePayment;
+  final VoidCallback onResumePayment;
 
-  const _OrderCard({required this.order});
+  const _OrderCard({
+    required this.order,
+    required this.canResumePayment,
+    required this.onResumePayment,
+  });
+
+  String get _paymentLabel => switch (order.paymentStatus) {
+    'paid' => 'PAID · TEST',
+    'unpaid' => 'UNPAID',
+    'cancelled' => 'CANCELLED',
+    'payment_review' => 'REVIEW REQUIRED',
+    'refund_pending' => 'REFUND PENDING',
+    'partially_refunded' => 'PARTIALLY REFUNDED',
+    'refunded' => 'REFUNDED',
+    'refund_failed' => 'REFUND FAILED',
+    final status => status.replaceAll('_', ' ').toUpperCase(),
+  };
+
+  String get _paymentMessage => switch (order.paymentStatus) {
+    'paid' => 'Payment confirmed in test mode · no real charge',
+    'unpaid' => 'No successful payment recorded.',
+    'cancelled' => 'Payment was cancelled before it was completed.',
+    'payment_review' =>
+      'Captured payment needs review. Contact GoCart support.',
+    'refund_pending' => 'Refund is pending with the payment provider.',
+    'partially_refunded' => 'A partial refund has been confirmed.',
+    'refunded' => 'Refund confirmed.',
+    'refund_failed' => 'Refund failed. Contact GoCart support.',
+    final status => 'Payment status: ${status.replaceAll('_', ' ')}.',
+  };
 
   String _formatDate(DateTime date) {
     const months = [
@@ -142,7 +193,7 @@ class _OrderCard extends StatelessWidget {
           ),
         ),
         title: Text(
-          'Order ${order.id.substring(0, 8).toUpperCase()}',
+          'Order ${order.displayCode}',
           style: const TextStyle(fontWeight: FontWeight.w800),
         ),
         subtitle: Text(
@@ -157,8 +208,8 @@ class _OrderCard extends StatelessWidget {
               style: const TextStyle(fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 3),
-            const Text(
-              'DEMO',
+            Text(
+              _paymentLabel,
               style: TextStyle(
                 fontSize: 9,
                 letterSpacing: 1,
@@ -184,7 +235,7 @@ class _OrderCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(30),
               ),
               child: Text(
-                'Payment: ${order.paymentStatus.replaceAll('_', ' ')} · no real charge',
+                _paymentMessage,
                 style: const TextStyle(
                   fontSize: 11,
                   color: Color(0xFF28764A),
@@ -193,6 +244,17 @@ class _OrderCard extends StatelessWidget {
               ),
             ),
           ),
+          if (canResumePayment) ...[
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: onResumePayment,
+                icon: const Icon(Icons.lock_outline),
+                label: const Text('Continue test payment'),
+              ),
+            ),
+          ],
         ],
       ),
     );
